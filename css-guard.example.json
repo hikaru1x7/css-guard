@@ -1,0 +1,13 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "widths": [1280, 375],
+  "routes": ["/"],
+  "protectedSelectors": [":root", ".btn"],
+  "protectedFiles": ["src/styles/tokens.css"],
+  "gateClassNames": false,
+  "requireScope": true,
+  "requireMeasure": true,
+  "measureMaxAgeMin": 20,
+  "scopeMaxAgeHours": 6,
+  "snapThresholdPx": 0
+}

@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-pre",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-bash",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-post",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-stop",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

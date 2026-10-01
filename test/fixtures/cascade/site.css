@@ -1,0 +1,14 @@
+:root {
+  --gap: 12px;
+}
+
+.cascade-parent {
+  font-size: 18px;
+}
+
+#cascade {
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--gap);
+  color: rgb(0, 128, 0) !important;
+}

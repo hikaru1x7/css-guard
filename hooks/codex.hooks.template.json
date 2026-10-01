@@ -1,0 +1,40 @@
+{
+  "description": "css-guard v0.2",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-pre",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-post",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-stop",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
