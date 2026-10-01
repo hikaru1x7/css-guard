@@ -50,7 +50,7 @@ Actions support `click:`, `fill:selector=text`, `hover:`, `wait:ms`, and `goto:`
 
 For CSS work, prepend `css-guard packet` output to the Codex task instructions. Use the same working tree that serves the measured page and a writable sandbox so the tool can save `.css-guard/`. Run `css-guard verify` after the delegated task returns.
 
-The Claude Bash hook checks direct writable `codex exec` commands for the packet and matching working tree. Read-only calls pass through. Non-visual work can include `<!-- css-guard: none -->`; this does not disable Codex's CSS checks.
+The Claude and Codex Bash hooks check direct writable `codex exec` commands for the packet and matching working tree. Read-only calls pass through. Non-visual work can include `<!-- css-guard: none -->`; this does not disable Codex's CSS checks.
 
 ## Limitations
 

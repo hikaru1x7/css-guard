@@ -34,6 +34,8 @@ cd css-guard
 
 This installs the skill, its bundled measurement tool, Chromium if needed, and the automatic hooks. It links the skill into `~/.agents/skills/css-guard` and `~/.claude/skills/css-guard`, creates `~/.local/bin/css-guard`, and adds hooks to `~/.codex/hooks.json` and `~/.claude/settings.json`. Unrelated settings and hooks are retained; changed settings receive a `.bak.<timestamp>` backup. Rerunning from the same checkout does not duplicate its hooks.
 
+Both integrations install four handlers: before editing, after editing, before finishing, and before delegating a writable task through `codex exec`.
+
 - **Codex:** review and trust the new hooks in `/hooks` before they run. See the [official OpenAI hook documentation](https://learn.chatgpt.com/docs/hooks).
 - **Claude Code:** start a new session after installation. See the [official hook documentation](https://code.claude.com/docs/en/hooks).
 

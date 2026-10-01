@@ -11,6 +11,16 @@
             "timeout": 20
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node __ROOT__/bin/css-guard.mjs hook-bash",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "PostToolUse": [

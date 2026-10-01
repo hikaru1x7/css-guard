@@ -22,6 +22,8 @@ for (const directory of ['css-guard', 'CSS Guard team\'s "folder" $example']) {
         await fs.writeFile(target, JSON.stringify({ setting: 'keep', hooks: { PreToolUse: [{ matcher: 'OtherTool', hooks: [unrelated] }] } }));
         const original = JSON.parse(await fs.readFile(path.join(repo, 'hooks', template), 'utf8'));
         const expected = Object.values(original.hooks).flatMap((groups) => groups.flatMap((group) => group.hooks)).length;
+        assert.equal(expected, 4);
+        assert.ok(original.hooks.PreToolUse.some((group) => group.matcher === 'Bash' && group.hooks.some((hook) => hook.command.endsWith(' hook-bash'))));
 
         for (let attempt = 0; attempt < 2; attempt++) {
           const merged = spawnSync(process.execPath, [path.join(repo, 'scripts/merge-hooks.mjs'), root, path.join(repo, 'hooks', template), target], { encoding: 'utf8' });
