@@ -1,7 +1,7 @@
 ---
 name: css-guard
 description: Measure rendered dimensions and applied CSS rules before and after CSS edits, and guard against changes outside the requested scope.
-license: MIT
+license: CC0-1.0
 ---
 
 - Preserve the requested element and purpose. Inspect definitions and usage, then declare only the necessary files with `css-guard begin --scope "<file>"`. This does not authorize every change in those files. Preserve existing edits and check for effects outside the request.

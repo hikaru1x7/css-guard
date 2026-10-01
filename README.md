@@ -119,6 +119,8 @@ The Claude Bash hook checks direct writable `codex exec` commands for the packet
 
 To disable checks for one project, remove or rename its `css-guard.json`. To uninstall, remove only hook handlers pointing to this checkout's `bin/css-guard.mjs` from both settings files, then remove the CLI and skill links that point to this checkout. Preserve unrelated settings and other installations. Restart your agents; remove the checkout only after removing its hooks and links.
 
-## License
+## Free to use
 
-[MIT](LICENSE). Community project; not affiliated with OpenAI or Anthropic.
+Released under [CC0 1.0 Universal](LICENSE), the same as [Codex Design Boost](https://github.com/hikaru1x7/codex-design-boost). Use, modify, redistribute, or sell this project's original work, including in commercial projects. No attribution required. Provided as-is, without warranties. See the [CC0 summary](https://creativecommons.org/publicdomain/zero/1.0/). Third-party dependencies retain their own licenses.
+
+Community project; not affiliated with OpenAI or Anthropic.

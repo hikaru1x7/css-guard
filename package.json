@@ -18,7 +18,7 @@
     "pngjs": "7.0.0"
   },
   "description": "Less CSS guesswork. Fewer surprise changes. Rendered measurements and edit guardrails for Claude Code and Codex CLI.",
-  "license": "MIT",
+  "license": "CC0-1.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hikaru1x7/css-guard.git"
