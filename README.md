@@ -8,6 +8,8 @@ A lightweight CSS-editing skill for AI coding agents. Install it once, then ask 
 
 Measure before editing. Batch the related fixes. Check once at the end. No repeated measurement after every edit, no extra stylelint run for every change, and no required companion design skill or MCP server.
 
+Dependency checks run only once per agent session, at the first skill or before-edit/Bash hook use. Later tasks, projects, and edits reuse that result. Current dependencies skip reinstalling and testing.
+
 ## How you use it
 
 After setup, ask your agent to fix spacing, sizing, alignment, or another CSS issue in ordinary language. In Claude Code and Codex, installed skills can be selected automatically when the request matches their description. If it is not selected, mention `css-guard`, use `/css-guard` in Claude Code, or `$css-guard` in Codex. See the official [Claude skill guide](https://code.claude.com/docs/en/skills) and [OpenAI skill guide](https://learn.chatgpt.com/docs/build-skills).
@@ -32,7 +34,7 @@ cd css-guard
 ./install.sh
 ```
 
-This installs the skill, its bundled measurement tool, Chromium if needed, and the automatic hooks. It links the skill into `~/.agents/skills/css-guard` and `~/.claude/skills/css-guard`, creates `~/.local/bin/css-guard`, and adds hooks to `~/.codex/hooks.json` and `~/.claude/settings.json`. Unrelated settings and hooks are retained; changed settings receive a `.bak.<timestamp>` backup. Rerunning from the same checkout does not duplicate its hooks.
+This checks and installs the latest stable Playwright and image-comparison dependencies, installs their matching Chromium, validates the tool, and installs the skill and automatic hooks. It links the skill into `~/.agents/skills/css-guard` and `~/.claude/skills/css-guard`, creates `~/.local/bin/css-guard`, and adds hooks to `~/.codex/hooks.json` and `~/.claude/settings.json`. Unrelated settings and hooks are retained; changed settings receive a `.bak.<timestamp>` backup. Rerunning from the same checkout does not duplicate its hooks.
 
 Both integrations install four handlers: before editing, after editing, before finishing, and before delegating a writable task through `codex exec`.
 
@@ -60,11 +62,13 @@ Automatic edit checks activate only in projects containing this file. Projects w
 
 ## What is behind the skill
 
-One short instruction file, a browser measurement tool, and optional hooks. The agent uses the tool to save dimensions, style information, and PNGs in the project's `.css-guard/` directory. Chromium may need downloading during initial installation. Task overhead depends on the pages and viewport widths checked; speed and token savings have not been benchmarked.
+One short instruction file, a browser measurement tool, and optional hooks. Browser elements and applied CSS are measured with Playwright; pixelmatch and pngjs compare screenshot pixels. These image libraries do not replace rendered element measurements. The agent uses the tool to save dimensions, style information, and PNGs in the project's `.css-guard/` directory. Chromium may need downloading during initial installation. Task overhead depends on the pages and viewport widths checked; speed and token savings have not been benchmarked.
 
 The bundled hooks reject supported edits outside declared files, edits without a recent measurement, whole-file replacement or deletion, and unapproved changes to protected targets. They request a matching post-edit measurement before the task ends.
 
 These checks are limited to supported edit paths. Direct shell writes can bypass them; internal hook errors fail open, and the Stop check blocks once for the same edit. Other agents need to review scope, protected targets, and before/after evidence through the skill. `verify` cannot validate edits that no hook recorded. Measurements and screenshot differences support inspection; they do not prove a good design or replace review of the requested change.
+
+The first session check only reads stable-version metadata. Hooks do not run package installs or the full test suite. If a newer version is needed, the agent runs `css-guard update` before measurement; it installs the dependency and browser updates and validates them. No checks repeat within that session, including after a failed check. Keep tool versions fixed during before/after measurement. An explicit retry uses `update --force`; agents without a session ID must supply `--session <ID>`.
 
 Read the [agent operations reference](skills/css-guard/references/operations.md) for configuration, commands, source-mapping limitations, delegation, and uninstall details.
 

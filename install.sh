@@ -32,11 +32,7 @@ ensure_link_target() {
 }
 
 cd "$ROOT"
-npm ci
-
-if ! node --input-type=module -e "import { chromium } from 'playwright'; import fs from 'node:fs'; process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 1)"; then
-  npx playwright install chromium
-fi
+node "$ROOT/bin/css-guard.mjs" update --force
 
 mkdir -p "$LOCAL_BIN"
 ensure_link_target "$LOCAL_BIN/css-guard"

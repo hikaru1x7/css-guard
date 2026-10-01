@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { sessionRecord } from '../lib/session-maintenance.mjs';
 
 export const repo = path.resolve(import.meta.dirname, '..');
 
@@ -25,6 +26,16 @@ export async function tempProject(config = {}) {
 export async function cli(project, params, stdin = '') {
   // テスト用に CLI を起動し、通常コマンドは JSON 出力へそろえる。
   const hook = ['hook-pre', 'hook-post', 'hook-stop', 'hook-bash'].includes(params[0]);
+  if (hook) {
+    let session;
+    try { session = JSON.parse(stdin).session_id; } catch {}
+    session ||= process.env.CODEX_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.CLAUDE_CODE_SESSION_ID;
+    if (session && project.home) {
+      const file = sessionRecord(session, project.home);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, JSON.stringify({ status: 'current' }));
+    }
+  }
   const command = hook || params.includes('--json') ? params : [...params, '--json'];
 
   return new Promise((resolve, reject) => {

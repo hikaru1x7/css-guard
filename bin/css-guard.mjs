@@ -163,13 +163,13 @@ function printSnap(result) {
 
 function help() {
   // 利用できるサブコマンドを案内する。
-  process.stdout.write('css-guard: begin, scope, measure, snap, approve, status, verify, packet, hook-pre, hook-post, hook-stop, hook-bash, doctor\n');
+  process.stdout.write('css-guard: update, begin, scope, measure, snap, approve, status, verify, packet, hook-pre, hook-post, hook-stop, hook-bash, doctor\n');
 }
 
 async function playwrightVersion() {
   // 導入済み package.json から Playwright の版を読む。
-  const pkg = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  return pkg.dependencies.playwright;
+  const { installedVersions } = await import('../lib/maintenance.mjs');
+  return (await installedVersions()).playwright;
 }
 
 async function main() {
@@ -192,6 +192,26 @@ async function main() {
   }
 
   const config = await loadConfig(process.cwd());
+
+  if (command === 'update') {
+    const { sessionId, updateSession, saveSession } = await import('../lib/session-maintenance.mjs');
+    if (!flags.force) {
+      const result = await updateSession(typeof flags.session === 'string' ? flags.session : sessionId(), {
+        update: async () => {
+          if (!verifyState(config, await readState(config.root)).ok) throw new Error('Unverified CSS edits remain. Finish verify with the current tools before updating.');
+          const { updateDependencies } = await import('../lib/maintenance.mjs');
+          return updateDependencies();
+        }
+      });
+      return flags.json ? jsonOutput(result) : process.stdout.write(result.skipped ? 'This session is checked. No repeated updates or tests.\n' : 'Measurement dependencies updated for this session.\n');
+    }
+    const state = await readState(config.root);
+    if (!verifyState(config, state).ok) throw new Error('Unverified CSS edits remain. Remeasure and verify with the current tools before updating.');
+    const { updateDependencies } = await import('../lib/maintenance.mjs');
+    const result = await updateDependencies();
+    if (sessionId()) await saveSession(sessionId(), { ...result, status: 'updated' });
+    return flags.json ? jsonOutput(result) : printTable(['Dependency', 'Verified stable version'], Object.entries(result.versions));
+  }
 
   if (command === 'begin') {
     if (!flags.scope?.length) {

@@ -5,6 +5,7 @@ These are the commands the agent runs behind the skill. Users can request CSS ch
 ## Editing workflow
 
 ```bash
+css-guard update  # First skill/hook use in this session only; not every task.
 css-guard begin --scope "src/styles/app.css" --snap
 css-guard measure / "#target" --label before
 # Batch related fixes.
@@ -15,6 +16,14 @@ css-guard snap
 Use `--snap` when full-page comparison is configured. With the bundled hook integrations, finish with `css-guard verify` too. Update scope with `css-guard scope` instead of restarting `begin`, which clears measurement records. Measurements and screenshots are saved in the project's `.css-guard/` directory; `begin` attempts to exclude it through Git's local exclude file.
 
 With other agents, review scope, protected targets, diffs, and before/after evidence directly. `verify` only checks edits recorded by hooks and cannot validate unrecorded edits from other agents.
+
+## Dependency maintenance
+
+Use `css-guard update` at the first skill use in a session. Before-edit and Bash hooks share that session record, so a hook that runs first can perform the lightweight stable-version check. Reuse the record across tasks and projects; no repeated network checks, installs, browser launches, or full test runs. When installed versions are already current, maintenance ends after checking metadata.
+
+When an update is required, the command installs stable Playwright, pixelmatch, and pngjs releases, installs matching Chromium, and validates them. Hooks report the update requirement; they do not run installation or the full test suite within the hook timeout. Dependencies are recorded in package.json and the lockfile after updating. Shared older browsers are preserved. Keep the tool versions fixed for each before/after comparison.
+
+Session IDs come from the hook input or `CODEX_SESSION_ID`, `CODEX_THREAD_ID`, or `CLAUDE_CODE_SESSION_ID`. If the agent does not expose one, pass `--session <ID>`. Session results are shared across projects in `~/.cache/css-guard/maintenance` (or `CSS_GUARD_HOME/maintenance` when configured). Simultaneous invocations do not repeat a check. A failed or interrupted check is not success and is not retried automatically; resolve the cause and explicitly use `update --force` to retry. Installation also uses `--force` and requires network access, npm, and a supported Node.js version.
 
 ## Configuration
 
@@ -35,6 +44,8 @@ Other settings: `requireScope` and `requireMeasure` (default `true`), `measureMa
 
 | Command | Purpose |
 | --- | --- |
+| `update [--session <ID>] [--json]` | Check stable dependencies once per session; update and validate only when needed |
+| `update --force [--json]` | Explicit installation or retry; bypass the session cache |
 | `begin --scope <glob...> [--snap] [--static <dir>]` | Reset the task state and declare files; optionally capture baseline screenshots |
 | `scope <glob...>` | Replace the declared scope without clearing measurements |
 | `measure <url\|path> <selector> [--widths 1280,375] [--parents 2] [--actions "click:#a;wait:300"] [--label name] [--json]` | Measure the rendered target and parents; save screenshots and compare the previous measurement |
