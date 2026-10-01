@@ -1,0 +1,3 @@
+interface:
+  display_name: "RenderGuard"
+  short_description: "Measure CSS, GUI and SVG changes and keep edits in scope"

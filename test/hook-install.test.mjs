@@ -12,7 +12,7 @@ for (const directory of ['css-guard', 'CSS Guard team\'s "folder" $example']) {
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'css-guard-hook-install-'));
     try {
       const root = path.join(temporary, directory);
-      const script = path.join(root, 'bin/css-guard.mjs');
+      const script = path.join(root, 'bin/render-guard.mjs');
       await fs.mkdir(path.dirname(script), { recursive: true });
       await fs.writeFile(script, 'process.stdout.write(JSON.stringify({ script: process.argv[1], command: process.argv[2] }));\n');
 
@@ -51,3 +51,34 @@ for (const directory of ['css-guard', 'CSS Guard team\'s "folder" $example']) {
     }
   });
 }
+
+test('combined installation migrates owned legacy hooks and skills without changing unrelated settings', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'render-guard-install-'));
+  try {
+    for (const relative of ['.codex/hooks.json', '.claude/settings.json']) {
+      const target = path.join(home, relative);
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, JSON.stringify({ keep: 'unchanged', hooks: { PreToolUse: [
+        { matcher: 'OtherTool', hooks: [{ type: 'command', command: 'echo unrelated' }] },
+        { matcher: 'apply_patch', hooks: [{ type: 'command', command: `node ${repo}/bin/css-guard.mjs hook-pre` }] },
+        { matcher: 'apply_patch', hooks: [{ type: 'command', command: `python3 ${home}/.codex/skills/gui-guard/scripts/gui-guard.py hook-pre` }] }
+      ] } }));
+    }
+    await fs.mkdir(path.join(home, '.agents/skills'), { recursive: true });
+    await fs.symlink(path.join(repo, 'skill'), path.join(home, '.agents/skills/css-guard'));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = spawnSync('bash', [path.join(repo, 'install.sh'), '--skip-update', '--home', home], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      for (const relative of ['.codex/hooks.json', '.claude/settings.json']) {
+        const settings = JSON.parse(await fs.readFile(path.join(home, relative), 'utf8'));
+        assert.equal(settings.keep, 'unchanged');
+        const handlers = Object.values(settings.hooks).flatMap((groups) => groups.flatMap((group) => group.hooks));
+        assert.equal(handlers.length, 5);
+        assert.equal(handlers.filter((hook) => hook.command.includes('bin/render-guard.mjs')).length, 4);
+        assert.equal(handlers.filter((hook) => hook.command === 'echo unrelated').length, 1);
+      }
+    }
+    await fs.access(path.join(home, '.agents/skills/render-guard/SKILL.md'));
+    assert.equal(await fs.lstat(path.join(home, '.agents/skills/css-guard')).catch(() => null), null);
+  } finally { await fs.rm(home, { recursive: true, force: true }); }
+});

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { checkSession, updateSession } from '../lib/session-maintenance.mjs';
+import { checkDay, updateDay } from '../lib/session-maintenance.mjs';
 import { preHook } from '../lib/hooks.mjs';
 import { installedVersions } from '../lib/maintenance.mjs';
 
@@ -13,18 +13,18 @@ async function fixture(t) {
   return home;
 }
 
-test('同一セッションは初回だけ確認し、作業数によらずネット・更新・試験を繰り返さない', async (t) => {
+test('同じ日は初回だけ確認し、作業数によらずネット・更新・試験を繰り返さない', async (t) => {
   const home = await fixture(t);
   let checks = 0, updates = 0;
-  const options = { home, latest: async () => { checks++; return { playwright: '1.63.0' }; },
+  const options = { home, now: new Date(2026, 9, 2), latest: async () => { checks++; return { playwright: '1.63.0' }; },
     installed: async () => ({ playwright: '1.63.0' }), update: async () => { updates++; } };
-  await checkSession('session-a', options);
+  await checkDay(options);
   for (let index = 0; index < 20; index++) {
-    assert.equal((await updateSession('session-a', options)).skipped, true);
-    assert.equal((await checkSession('session-a', options)).status, 'current');
+    assert.equal((await updateDay(options)).skipped, true);
+    assert.equal((await checkDay(options)).status, 'current');
   }
   assert.equal(checks, 1); assert.equal(updates, 0);
-  await checkSession('session-b', options);
+  await checkDay({ ...options, now: new Date(2026, 9, 3) });
   assert.equal(checks, 2);
 });
 
@@ -32,20 +32,20 @@ test('フック先発で新版を検出した後、スキル側の更新は1回�
   const home = await fixture(t);
   let checks = 0, updates = 0;
   const options = { home, latest: async () => { checks++; return { playwright: '2' }; },
-    installed: async () => ({ playwright: '1' }), update: async () => { updates++; return { versions: { playwright: '2' } }; } };
-  assert.equal((await checkSession('s', options)).status, 'needs-update');
-  await updateSession('s', options);
-  await updateSession('s', options);
-  assert.equal((await checkSession('s', options)).status, 'updated');
+    installed: async () => ({ playwright: updates ? '2' : '1' }), update: async () => { updates++; return { versions: { playwright: '2' } }; } };
+  assert.equal((await checkDay(options)).status, 'needs-update');
+  await updateDay(options);
+  await updateDay(options);
+  assert.equal((await checkDay(options)).status, 'updated');
   assert.equal(checks, 1); assert.equal(updates, 1);
 });
 
-test('同時の初回発動でも確認は1回、失敗したセッションは自動再試行しない', async (t) => {
+test('同時の初回発動でも確認は1回、失敗した日はは自動再試行しない', async (t) => {
   const home = await fixture(t);
   let checks = 0;
   const options = { home, latest: async () => { checks++; await new Promise((resolve) => setTimeout(resolve, 20)); throw new Error('offline'); }, installed: async () => ({}) };
-  await Promise.all(Array.from({ length: 10 }, () => checkSession('s', options)));
-  for (let index = 0; index < 5; index++) assert.equal((await checkSession('s', options)).status, 'failed');
+  await Promise.all(Array.from({ length: 10 }, () => checkDay(options)));
+  for (let index = 0; index < 5; index++) assert.equal((await checkDay(options)).status, 'failed');
   assert.equal(checks, 1);
 });
 
@@ -61,9 +61,16 @@ test('実際の編集前フックはプロジェクトをまたいでもネッ�
     await fs.mkdir(root, { recursive: true });
     await fs.writeFile(path.join(root, 'css-guard.json'), '{}');
     await fs.writeFile(path.join(root, 'style.css'), '.box { width: 10px; }');
-    await preHook({ session_id: 'first-hook', cwd: root, tool_name: 'Edit',
+    await preHook({ session_id: 'session-' + project, cwd: root, tool_name: 'Edit',
       tool_input: { file_path: path.join(root, 'style.css'), old_string: '10px', new_string: '12px' } });
   }
-  await updateSession('first-hook', { home, update: async () => { throw new Error('再更新は禁止'); } });
+  await updateDay({ home, update: async () => { throw new Error('再更新は禁止'); } });
   assert.equal(requests, 3); // 3部品を最初の1回だけ取得
+});
+
+test('更新コマンドが成功しても実際の版が古ければ更新成功を記録しない', async (t) => {
+  const home = await fixture(t);
+  const options = { home, latest: async () => ({ playwright: '2' }), installed: async () => ({ playwright: '1' }), update: async () => ({ versions: { playwright: '2' } }) };
+  await assert.rejects(updateDay(options), /do not match/);
+  assert.equal((await checkDay(options)).status, 'failed');
 });

@@ -2,3 +2,7 @@ node_modules/
 .npm-cache/
 .css-guard/
 .guard-maintenance.json
+
+.render-guard/
+**/.runtime/
+**/__pycache__/

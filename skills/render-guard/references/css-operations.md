@@ -5,25 +5,25 @@ These are the commands the agent runs behind the skill. Users can request CSS ch
 ## Editing workflow
 
 ```bash
-css-guard update  # First skill/hook use in this session only; not every task.
-css-guard begin --scope "src/styles/app.css" --snap
-css-guard measure / "#target" --label before
+render-guard update  # First applicable skill/hook use each day; not every task.
+render-guard css begin --scope "src/styles/app.css" --snap
+render-guard css measure / "#target" --label before
 # Batch related fixes.
-css-guard measure / "#target" --label after
-css-guard snap
+render-guard css measure / "#target" --label after
+render-guard css snap
 ```
 
-Use `--snap` when full-page comparison is configured. With the bundled hook integrations, finish with `css-guard verify` too. Update scope with `css-guard scope` instead of restarting `begin`, which clears measurement records. Measurements and screenshots are saved in the project's `.css-guard/` directory; `begin` attempts to exclude it through Git's local exclude file.
+Use `--snap` when full-page comparison is configured. With the bundled hook integrations, finish with `render-guard css verify` too. Update scope with `render-guard css scope` instead of restarting `begin`, which clears measurement records. Measurements and screenshots are saved in the project's `.css-guard/` directory; `begin` attempts to exclude it through Git's local exclude file.
 
 With other agents, review scope, protected targets, diffs, and before/after evidence directly. `verify` only checks edits recorded by hooks and cannot validate unrecorded edits from other agents.
 
 ## Dependency maintenance
 
-Use `css-guard update` at the first skill use in a session. Before-edit and Bash hooks share that session record, so a hook that runs first can perform the lightweight stable-version check. Reuse the record across tasks and projects; no repeated network checks, installs, browser launches, or full test runs. When installed versions are already current, maintenance ends after checking metadata.
+Use `render-guard update` at the first applicable skill use each day. Before-edit and Bash hooks share that daily record, so a hook that runs first can perform the lightweight stable-version check. Reuse the record across tasks and projects; no repeated network checks, installs, browser launches, or full test runs. When installed versions are already current, maintenance ends after checking metadata.
 
 When an update is required, the command installs stable Playwright, pixelmatch, and pngjs releases, installs matching Chromium, and validates them. Hooks report the update requirement; they do not run installation or the full test suite within the hook timeout. Dependencies are recorded in package.json and the lockfile after updating. Shared older browsers are preserved. Keep the tool versions fixed for each before/after comparison.
 
-Session IDs come from the hook input or `CODEX_SESSION_ID`, `CODEX_THREAD_ID`, or `CLAUDE_CODE_SESSION_ID`. If the agent does not expose one, pass `--session <ID>`. Session results are shared across projects in `~/.cache/css-guard/maintenance` (or `CSS_GUARD_HOME/maintenance` when configured). Simultaneous invocations do not repeat a check. A failed or interrupted check is not success and is not retried automatically; resolve the cause and explicitly use `update --force` to retry. Installation also uses `--force` and requires network access, npm, and a supported Node.js version.
+The local calendar date selects a shared record in `~/.cache/css-guard/maintenance` (or `CSS_GUARD_HOME/maintenance`). Other projects and sessions read the same small file; no server or scan of session results is involved. Simultaneous invocations do not repeat a check. A failed or interrupted check is not success and is not retried automatically; resolve the cause and explicitly use `update --force` to retry. Installation also uses `--force` and requires network access, npm, and a supported Node.js version.
 
 ## Configuration
 
@@ -44,8 +44,8 @@ Other settings: `requireScope` and `requireMeasure` (default `true`), `measureMa
 
 | Command | Purpose |
 | --- | --- |
-| `update [--session <ID>] [--json]` | Check stable dependencies once per session; update and validate only when needed |
-| `update --force [--json]` | Explicit installation or retry; bypass the session cache |
+| `update [--json]` | Check stable dependencies once per local calendar day; update and validate only when needed |
+| `update --force [--json]` | Explicit installation or retry; bypass the daily cache |
 | `begin --scope <glob...> [--snap] [--static <dir>]` | Reset the task state and declare files; optionally capture baseline screenshots |
 | `scope <glob...>` | Replace the declared scope without clearing measurements |
 | `measure <url\|path> <selector> [--widths 1280,375] [--parents 2] [--actions "click:#a;wait:300"] [--label name] [--json]` | Measure the rendered target and parents; save screenshots and compare the previous measurement |
@@ -59,7 +59,7 @@ Actions support `click:`, `fill:selector=text`, `hover:`, `wait:ms`, and `goto:`
 
 ## Delegating from Claude to Codex
 
-For CSS work, prepend `css-guard packet` output to the Codex task instructions. Use the same working tree that serves the measured page and a writable sandbox so the tool can save `.css-guard/`. Run `css-guard verify` after the delegated task returns.
+For CSS work, prepend `render-guard css packet` output to the Codex task instructions. Use the same working tree that serves the measured page and a writable sandbox so the tool can save `.css-guard/`. Run `render-guard css verify` after the delegated task returns.
 
 The Claude and Codex Bash hooks check direct writable `codex exec` commands for the packet and matching working tree. Read-only calls pass through. Non-visual work can include `<!-- css-guard: none -->`; this does not disable Codex's CSS checks.
 
@@ -67,14 +67,13 @@ The agent's command-permission checks still apply. A valid packet does not grant
 
 ## Limitations
 
-- Edit blocking covers Claude's `Edit`/`Write` and Codex's `apply_patch`. Direct shell writes can bypass it. These hooks are workflow checks, not a security boundary.
+- Edit blocking covers Claude's `Edit`/`Write`/`MultiEdit` and Codex's `apply_patch`. Direct shell writes can bypass it. These hooks are workflow checks, not a security boundary.
 - Hooks fail open on internal errors, logging the error rather than stopping all work. The Stop check blocks once for the same edit, rather than creating an endless loop. Check `verify` before reporting completion.
 - The scope is file-based. The skill and diff review still need to preserve the requested elements and properties.
 - CSS rule sources are diagnostic candidates. Inline or framework-generated CSS may report page lines instead of original source-file lines; complex cascade cases need inspection.
 - Screenshot differences flag changed pixels, including expected edits. The agent still needs to inspect them; a successful measurement is not proof of a good design.
-- Delegation checks cannot see commands hidden inside wrapper scripts or destinations without `css-guard.json`.
+- Delegation checks cannot see commands hidden inside wrapper scripts or destinations without a CSS configuration.
 
 ## Disable or remove
 
-To disable checks for one project, remove or rename its `css-guard.json`. To uninstall, remove only hook handlers pointing to this checkout's `bin/css-guard.mjs` from both settings files, then remove the CLI and skill links that point to this checkout. Preserve unrelated settings and other installations. Restart your agents; remove the checkout only after removing its hooks and links.
-
+Remove a project's CSS section or legacy `css-guard.json` to disable its CSS checks. For the combined installation, remove only handlers pointing to this checkout's `bin/render-guard.mjs`, then remove the `render-guard` skill and CLI links belonging to this checkout. Preserve unrelated settings and other installations. Restart agents before deleting the checkout. Legacy CSS/GUI CLI aliases are compatibility tools, not separate skills.

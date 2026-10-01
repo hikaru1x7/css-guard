@@ -1,57 +1,36 @@
 #!/usr/bin/env node
-// フック設定の雛形を、既存の設定ファイルへ二重登録せずに足す。
-// 使い方: node scripts/merge-hooks.mjs <導入先ROOT> <雛形JSON> <書き込む設定JSON>
-// 雛形の __ROOT__ を導入先に置き換え、css-guard のフックだけを入れ替える（他のフック・設定は残す）。
-// 既存ファイルは <設定>.bak.<日時> に控えを取る。
+// Merge this checkout's combined hooks; preserve all unrelated settings.
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const [root, source, target] = process.argv.slice(2);
-
-if (!root || !source || !target) {
-  process.stderr.write('Usage: merge-hooks.mjs <ROOT> <template> <settings-file>\n');
-  process.exit(1);
-}
-
-const script = `${root}/bin/css-guard.mjs`;
-const shellScript = /^[A-Za-z0-9_./-]+$/.test(script) ? script : `'${script.replaceAll("'", "'\\''")}'`;
-const ours = (hook) => typeof hook?.command === 'string' && (hook.command.includes(script) || hook.command.includes(shellScript));
+const [root, source, target, oldGui = path.join(os.homedir(), '.codex/skills/gui-guard/scripts/gui-guard.py')] = process.argv.slice(2);
+if (!root || !source || !target) throw new Error('Usage: merge-hooks.mjs <ROOT> <template> <settings> [old-GUI-script]');
+const quote = (value) => /^[A-Za-z0-9_./-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\\''") + "'";
+const script = path.join(root, 'bin/render-guard.mjs');
+const oldCss = path.join(root, 'bin/css-guard.mjs');
+const kinds = ['hook-pre', 'hook-post', 'hook-stop', 'hook-bash'];
+const owned = new Set(kinds.flatMap((kind) => [
+  'node ' + quote(script) + ' ' + kind, 'node ' + quote(oldCss) + ' ' + kind, 'python3 ' + quote(oldGui) + ' ' + kind
+]));
+const ours = (hook) => owned.has(hook?.command);
 const addition = JSON.parse(fs.readFileSync(source, 'utf8'));
-for (const groups of Object.values(addition.hooks)) {
-  for (const group of groups) {
-    for (const hook of group.hooks || []) {
-      if (typeof hook.command === 'string') {
-        hook.command = hook.command.replaceAll('__ROOT__/bin/css-guard.mjs', shellScript);
-      }
-    }
-  }
+for (const groups of Object.values(addition.hooks)) for (const group of groups) for (const hook of group.hooks || []) {
+  hook.command = hook.command.replaceAll('__ROOT__/bin/render-guard.mjs', quote(script));
 }
 let current = {};
-let existed = false;
-
-try {
-  current = JSON.parse(fs.readFileSync(target, 'utf8'));
-  existed = true;
-} catch (error) {
-  if (error.code !== 'ENOENT') {
-    throw error;
-  }
-}
-
+try { current = JSON.parse(fs.readFileSync(target, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+const original = JSON.stringify(current);
 current.hooks ||= {};
-
 for (const [event, groups] of Object.entries(addition.hooks)) {
-  const retained = (current.hooks[event] || [])
-    .map((group) => ({ ...group, hooks: (group.hooks || []).filter((hook) => !ours(hook)) }))
-    .filter((group) => group.hooks.length);
-  current.hooks[event] = retained.concat(groups.filter((group) => group.hooks?.some(ours)));
+  const retained = (current.hooks[event] || []).map((group) => ({ ...group, hooks: (group.hooks || []).filter((hook) => !ours(hook)) })).filter((group) => group.hooks.length);
+  current.hooks[event] = retained.concat(groups);
 }
-
-if (existed) {
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-');
-  fs.copyFileSync(target, `${target}.bak.${stamp}`);
+if (JSON.stringify(current) === original) {
+  process.stdout.write(target + ': unchanged\n');
+} else {
+  if (fs.existsSync(target)) fs.copyFileSync(target, target + '.bak.render-guard-' + Date.now());
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, JSON.stringify(current, null, 2) + '\n');
+  process.stdout.write(target + ': RenderGuard hooks installed; review Codex hook trust separately\n');
 }
-
-fs.mkdirSync(path.dirname(target), { recursive: true });
-fs.writeFileSync(target, `${JSON.stringify(current, null, 2)}\n`);
-process.stdout.write(`Updated ${target}${existed ? ' (backup: same name with .bak.<timestamp>)' : ''}\n`);

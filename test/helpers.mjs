@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { sessionRecord } from '../lib/session-maintenance.mjs';
+import { sessionRecord, dayId } from '../lib/session-maintenance.mjs';
 
 export const repo = path.resolve(import.meta.dirname, '..');
 
@@ -31,7 +31,7 @@ export async function cli(project, params, stdin = '') {
     try { session = JSON.parse(stdin).session_id; } catch {}
     session ||= process.env.CODEX_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.CLAUDE_CODE_SESSION_ID;
     if (session && project.home) {
-      const file = sessionRecord(session, project.home);
+      const file = sessionRecord(dayId(), project.home);
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, JSON.stringify({ status: 'current' }));
     }

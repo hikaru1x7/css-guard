@@ -1,0 +1,15 @@
+{
+  "css": {
+    "static": ".",
+    "widths": [1280, 375],
+    "routes": ["/index.html"],
+    "protectedSelectors": [":root"],
+    "protectedFiles": ["shared.css"]
+  },
+  "svg": {
+    "static": ".",
+    "widths": [1280, 375],
+    "comparisonSelectors": ["#unchanged-label"],
+    "protectedFiles": ["shared-icons.svg"]
+  }
+}

@@ -1,32 +1,22 @@
-# CSS Guard
+# RenderGuard
 
-**Less CSS guesswork. Fewer surprise changes.**
+**Measure the display. Keep edits within the request.**
 
-A lightweight CSS-editing skill for AI coding agents. Install it once, then ask for CSS changes as usual. The skill guides your agent to measure the actual page, keep edits within the request, and check the result.
+A skill for AI coding agents editing CSS, native application GUIs and SVG code. One entry point and one hook integration, with mode-specific measurements and checks.
 
-**CSS-focused. Small instruction footprint. Built for everyday editing.**
+RenderGuard continues the existing CSS Guard project. Its established CSS measurements, scope rules, screenshot comparisons and hook behavior remain in use. The GUI engine keeps runtime-version, DPI, comparison-control and evidence checks. SVG adds rendered shape, text, stroke and comparison-image checks. The repository URL remains unchanged so existing links keep working.
 
-Measure before editing. Batch the related fixes. Check once at the end. No repeated measurement after every edit, no extra stylelint run for every change, and no required companion design skill or MCP server.
+| Mode | Measurement | Tool |
+|---|---|---|
+| CSS | Rendered rectangles, computed styles, parent layout, rule sources and PNGs | Playwright |
+| GUI | Correct running application, controls and comparisons, DPI, text and PNGs | Native Win32, UIAutomation, WinAppCLI or a project adapter |
+| SVG | Shapes and comparisons, paint/text styles, transforms, local geometry and PNGs | Playwright |
 
-Dependency checks run only once per agent session, at the first skill or before-edit/Bash hook use. Later tasks, projects, and edits reuse that result. Current dependencies skip reinstalling and testing.
-
-## How you use it
-
-After setup, ask your agent to fix spacing, sizing, alignment, or another CSS issue in ordinary language. In Claude Code and Codex, installed skills can be selected automatically when the request matches their description. If it is not selected, mention `css-guard`, use `/css-guard` in Claude Code, or `$css-guard` in Codex. See the official [Claude skill guide](https://code.claude.com/docs/en/skills) and [OpenAI skill guide](https://learn.chatgpt.com/docs/build-skills).
-
-When the skill is used, the agent handles the measurement commands and checks as part of the CSS task. You do not need to run those commands yourself for each edit.
-
-- **Measure before guessing.** Inspect rendered dimensions, computed styles, parent layout, CSS rule source candidates, and screenshots.
-- **Keep the request in view.** Declare the files to edit, preserve existing changes, and inspect effects outside the requested elements.
-- **Check the result.** Remeasure the same target, state, and viewport widths; compare configured pages and report what changed.
-
-The skill can be used by other agents that support skills or can read the instructions, run local commands, and inspect images. Bundled hooks add automatic edit blocking for Claude Code and Codex. Other agents follow the skill's checks without those integrations.
+Pillow, pixelmatch and pngjs compare images; they do not replace rendered control measurements. General image editing and office documents are outside this skill.
 
 ## Install once
 
-Requires Git, Node.js **20.11 or newer**, npm, Bash, and an agent that can run local commands and inspect images. Developed and tested on Linux/WSL, including browser measurements, live Claude Code edit/finish hooks, and live Claude Code/Codex delegation checks. macOS, native Windows, and other agents' end-to-end workflows have not been verified.
-
-### Claude Code and Codex
+Requires Git, Node.js 20.11+, Python 3.10+, npm, Bash, and an agent that can run local commands and inspect images. Windows control measurement requires Windows/WSL and a compatible adapter.
 
 ```bash
 git clone https://github.com/hikaru1x7/css-guard.git
@@ -34,46 +24,69 @@ cd css-guard
 ./install.sh
 ```
 
-This checks and installs the latest stable Playwright and image-comparison dependencies, installs their matching Chromium, validates the tool, and installs the skill and automatic hooks. It links the skill into `~/.agents/skills/css-guard` and `~/.claude/skills/css-guard`, creates `~/.local/bin/css-guard`, and adds hooks to `~/.codex/hooks.json` and `~/.claude/settings.json`. Unrelated settings and hooks are retained; changed settings receive a `.bak.<timestamp>` backup. Rerunning from the same checkout does not duplicate its hooks.
+The installer validates stable dependencies, installs matching Chromium and a private GUI image runtime, and installs applicable Windows measurement dependencies. It links the single skill into `~/.agents/skills/render-guard` and `~/.claude/skills/render-guard`, creates `~/.local/bin/render-guard`, and merges four shared hook handlers into both agents' settings. Unrelated settings/hooks remain intact; changed settings are backed up. Legacy CLI aliases remain for project compatibility and are not separate skills.
 
-Both integrations install four handlers: before editing, after editing, before finishing, and before delegating a writable task through `codex exec`.
+Codex: review and trust the new hooks in `/hooks`. Registration is not activation. Claude Code: start a new session after installation. Keep the checkout and `~/.local/bin` on PATH. Existing real skill directories are preserved.
 
-- **Codex:** review and trust the new hooks in `/hooks` before they run. See the [official OpenAI hook documentation](https://learn.chatgpt.com/docs/hooks).
-- **Claude Code:** start a new session after installation. See the [official hook documentation](https://code.claude.com/docs/en/hooks).
-
-Keep the checkout in place and ensure `~/.local/bin` is on your `PATH`. If a skill directory already exists, review it and move it aside before installing; the installer refuses to overwrite real directories.
-
-### Other agents
-
-From the cloned checkout, install the measurement tool without changing Claude or Codex settings, then select your agent with the [Skills CLI](https://github.com/vercel-labs/skills#install-a-skill):
+For other agents, install the CLI without changing Claude/Codex settings:
 
 ```bash
 ./install.sh --cli-only
-npx skills add hikaru1x7/css-guard --skill css-guard
+npx skills add hikaru1x7/css-guard --skill render-guard
 ```
 
-If your agent does not support skill installation, ask it to read [skills/css-guard/SKILL.md](skills/css-guard/SKILL.md) from your checkout instead. Installing only the instruction file does not install the bundled measurement tool or hooks.
+Or read [the skill](skills/render-guard/SKILL.md) from your checkout. Installing instructions alone does not install tools or hooks. Other agents must review scope and evidence directly; verify cannot prove unrecorded edits.
 
-### Project setup
+## Ordinary use
 
-Place a `css-guard.json` in the project you want to work on. Use [css-guard.example.json](css-guard.example.json), set your development server URL or static-site directory, and choose viewport widths, comparison routes, and protected targets. You can ask your agent to help with this setup.
+Ask for CSS, GUI or SVG changes normally. Invoke `$render-guard` in Codex or `/render-guard` in Claude when needed. The agent reads only the relevant mode instructions and handles measurement/check commands.
 
-Automatic edit checks activate only in projects containing this file. Projects without it are left alone.
+```bash
+render-guard update # First applicable skill/hook use each day.
+render-guard css begin --scope 'src/app.css' --snap
+render-guard css measure / '#target' --label before
+# Batch the requested fixes.
+render-guard css measure / '#target' --label after
+render-guard css snap
+render-guard css verify
+```
 
-## What is behind the skill
+GUI uses `render-guard gui begin → build → after → verify`; source-based applications skip build but verify actually loaded sources. SVG uses `render-guard svg begin → measure before → measure after → verify`. For mixed tasks, check each edited mode. File scope is not permission to change every element in those files. Change scope without clearing evidence.
 
-One short instruction file, a browser measurement tool, and optional hooks. Browser elements and applied CSS are measured with Playwright; pixelmatch and pngjs compare screenshot pixels. These image libraries do not replace rendered element measurements. The agent uses the tool to save dimensions, style information, and PNGs in the project's `.css-guard/` directory. Chromium may need downloading during initial installation. Task overhead depends on the pages and viewport widths checked; speed and token savings have not been benchmarked.
+## Configure a project
 
-The bundled hooks reject supported edits outside declared files, edits without a recent measurement, whole-file replacement or deletion, and unapproved changes to protected targets. They request a matching post-edit measurement before the task ends.
+New projects use `render-guard.json` with the needed `css`, `gui` and/or `svg` sections. See [the example](render-guard.example.json). Existing `css-guard.json` and `gui-guard.json`, state folders and measurements remain usable; conversion is optional. A unified section takes precedence over the matching legacy configuration.
 
-These checks are limited to supported edit paths. Direct shell writes can bypass them; internal hook errors fail open, and the Stop check blocks once for the same edit. Other agents need to review scope, protected targets, and before/after evidence through the skill. `verify` cannot validate edits that no hook recorded. Measurements and screenshot differences support inspection; they do not prove a good design or replace review of the requested change.
+- [CSS workflow and configuration](skills/render-guard/references/css.md)
+- [GUI workflow](skills/render-guard/references/gui.md) and [adapter/settings details](engines/gui/GUARD.md)
+- [SVG workflow and configuration](skills/render-guard/references/svg.md)
 
-The first session check only reads stable-version metadata. Hooks do not run package installs or the full test suite. If a newer version is needed, the agent runs `css-guard update` before measurement; it installs the dependency and browser updates and validates them. No checks repeat within that session, including after a failed check. Keep tool versions fixed during before/after measurement. An explicit retry uses `update --force`; agents without a session ID must supply `--session <ID>`.
+CSS saves its established evidence in `.css-guard/`; GUI keeps `.gui-guard/`. SVG uses `.render-guard/svg/` separately, preventing cross-mode overwrite. Automatic gates activate only in configured projects.
 
-Read the [agent operations reference](skills/css-guard/references/operations.md) for configuration, commands, source-mapping limitations, delegation, and uninstall details.
+SVG requires a unique requested target and a separate unchanged comparison. It compares measured geometry/styles/markup and captured comparison pixels. Geometry boxes do not represent every stroke/filter/glyph pixel; inspect PNGs for clipping and painting outside bounds.
+
+## Daily maintenance
+
+The first skill or relevant before-edit/Bash hook use checks both toolchains' stable-version metadata. Tasks, projects, edits and mode changes in the same day reuse the records. Current versions skip installation, browser launches and full test runs. Hooks do not perform heavy updates. Run update before measurement when newer dependencies are required; keep versions fixed throughout before/after comparison.
+
+The operating system’s local calendar date selects a small shared record. Session IDs are not needed for maintenance. Existing CSS/GUI maintenance caches are retained. Concurrent calls avoid duplicate checks; failures do not retry automatically. Installation or an explicit retry uses `update --force`. `install.sh --skip-update` only registers a previously validated environment.
+
+Daily reuse reads a small file per toolchain, shared across sessions and projects. The operating system’s local date selects the record; the next day’s first applicable use checks again. A before/after comparison cannot pass if its measurement tool versions changed.
+
+Private GUI dependencies leave system Python/Pillow and application libraries unchanged. Shared older Playwright browsers are preserved. WinAppCLI downloads require the official asset checksum and executable version, telemetry is disabled, and changed versions run actual Windows fixtures before success is recorded.
+
+## Checks and practical limits
+
+Hooks cover supported Claude Edit/Write/MultiEdit and Codex apply_patch edits, record changed targets, and require matching post-edit measurements. They preserve CSS scope/protected-file/whole-file checks and GUI source/binary/config/evidence checks. Writable Codex delegation needs the matching mode packet; read-only and explicitly non-visual work have supported exemptions. A packet never grants command execution permission.
+
+Direct shell writes and unconfigured projects are not completely guarded. The CSS engine retains its error handling and one-time Stop block behavior; GUI checks retain their stricter version/evidence checks. A failing engine cannot hide another engine's rejection. Measurements do not prove good design or that the images were reviewed.
+
+Validation includes existing CSS regressions, common-entry CSS parity, GUI protocol/check tests both directly and through the common entry, SVG browser measurements and refusal cases, and actual WinForms/WPF adapter fixtures at 96 DPI on WSL/Windows. Protocol tests use synthetic GUI screens; they are distinct from actual Windows measurements. High DPI, Qt/Tk, arbitrary custom drawing, macOS and other native OS workflows require project validation. Performance/token savings have not been benchmarked.
 
 ## Free to use
 
-Released under [CC0 1.0 Universal](LICENSE), the same as [Codex Design Boost](https://github.com/hikaru1x7/codex-design-boost). Use, modify, redistribute, or sell this project's original work, including in commercial projects. No attribution required. Provided as-is, without warranties. See the [CC0 summary](https://creativecommons.org/publicdomain/zero/1.0/). Third-party dependencies retain their own licenses.
+Released under [CC0 1.0 Universal](LICENSE). Use, modify, redistribute or sell this project's original work, including commercially, without attribution. Provided as-is, without warranties. Third-party dependencies retain their own licenses.
 
-Community project; not affiliated with OpenAI or Anthropic.
+Community project; not affiliated with OpenAI, Anthropic or Microsoft.
+
+See [validation evidence and the actual update exercise](docs/VALIDATION.md).

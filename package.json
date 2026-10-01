@@ -1,13 +1,16 @@
 {
-  "name": "css-guard",
-  "version": "0.4.0",
+  "name": "render-guard",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "bin": {
+    "render-guard": "bin/render-guard.mjs",
     "css-guard": "bin/css-guard.mjs"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:gui": "python3 engines/gui/scripts/test_gui_guard.py",
+    "test:gui-routing": "RENDER_GUARD_FORWARD_TEST=1 python3 engines/gui/scripts/test_gui_guard.py"
   },
   "engines": {
     "node": ">=20.11"
@@ -17,7 +20,7 @@
     "playwright": "1.63.0",
     "pngjs": "7.0.0"
   },
-  "description": "Less CSS guesswork. Fewer surprise changes. A lightweight CSS-editing skill for AI coding agents, with rendered checks and optional automatic hooks.",
+  "description": "Measure rendered CSS, GUI and SVG changes and guard the requested edit scope.",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
@@ -25,8 +28,9 @@
   },
   "keywords": [
     "css",
+    "gui",
+    "svg",
     "agent-skills",
-    "ai-agents",
     "claude-code",
     "codex",
     "visual-regression"

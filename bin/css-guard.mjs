@@ -194,22 +194,22 @@ async function main() {
   const config = await loadConfig(process.cwd());
 
   if (command === 'update') {
-    const { sessionId, updateSession, saveSession } = await import('../lib/session-maintenance.mjs');
+    const { dayId, updateDay, saveSession } = await import('../lib/session-maintenance.mjs');
     if (!flags.force) {
-      const result = await updateSession(typeof flags.session === 'string' ? flags.session : sessionId(), {
+      const result = await updateDay({
         update: async () => {
           if (!verifyState(config, await readState(config.root)).ok) throw new Error('Unverified CSS edits remain. Finish verify with the current tools before updating.');
           const { updateDependencies } = await import('../lib/maintenance.mjs');
           return updateDependencies();
         }
       });
-      return flags.json ? jsonOutput(result) : process.stdout.write(result.skipped ? 'This session is checked. No repeated updates or tests.\n' : 'Measurement dependencies updated for this session.\n');
+      return flags.json ? jsonOutput(result) : process.stdout.write(result.skipped ? 'Today is checked. No repeated updates or tests.\n' : 'Measurement dependencies updated for today.\n');
     }
     const state = await readState(config.root);
     if (!verifyState(config, state).ok) throw new Error('Unverified CSS edits remain. Remeasure and verify with the current tools before updating.');
     const { updateDependencies } = await import('../lib/maintenance.mjs');
     const result = await updateDependencies();
-    if (sessionId()) await saveSession(sessionId(), { ...result, status: 'updated' });
+    await saveSession(dayId(), { ...result, status: 'updated' });
     return flags.json ? jsonOutput(result) : printTable(['Dependency', 'Verified stable version'], Object.entries(result.versions));
   }
 

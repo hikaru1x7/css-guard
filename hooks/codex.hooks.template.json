@@ -1,5 +1,5 @@
 {
-  "description": "css-guard v0.2",
+  "description": "RenderGuard CSS/GUI/SVG",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node __ROOT__/bin/css-guard.mjs hook-pre",
+            "command": "node __ROOT__/bin/render-guard.mjs hook-pre",
             "timeout": 20
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node __ROOT__/bin/css-guard.mjs hook-bash",
+            "command": "node __ROOT__/bin/render-guard.mjs hook-bash",
             "timeout": 20
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node __ROOT__/bin/css-guard.mjs hook-post",
+            "command": "node __ROOT__/bin/render-guard.mjs hook-post",
             "timeout": 90
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node __ROOT__/bin/css-guard.mjs hook-stop",
+            "command": "node __ROOT__/bin/render-guard.mjs hook-stop",
             "timeout": 20
           }
         ]

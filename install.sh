@@ -1,57 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLAUDE_SKILLS="$HOME/.claude/skills"
-AGENTS_SKILLS="$HOME/.agents/skills"
-CODEX_DIR="$HOME/.codex"
-LOCAL_BIN="$HOME/.local/bin"
-
 CLI_ONLY=false
-case "${1:-}" in
-  --cli-only) CLI_ONLY=true ;;
-  "") ;;
-  --help|-h)
-    printf '%s\n' 'Usage: ./install.sh [--cli-only]' 'Default: install CLI, skill links, and Claude Code/Codex hooks.' '--cli-only: install the CLI and browser without changing agent settings.'
-    exit 0 ;;
-  *) printf '%s\n' "Unknown option: $1" >&2; exit 1 ;;
-esac
-if [[ $# -gt 1 ]]; then
-  printf '%s\n' 'Pass at most one option.' >&2
-  exit 1
-fi
-
+SKIP_UPDATE=false
+INSTALL_HOME="$HOME"
+SKILL_DIR="$ROOT/skill"
+if [[ -d "$ROOT/skills/render-guard" ]]; then SKILL_DIR="$ROOT/skills/render-guard"; fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cli-only) CLI_ONLY=true ;;
+    --skip-update) SKIP_UPDATE=true ;;
+    --home) INSTALL_HOME="$2"; shift ;;
+    *) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
+  esac
+  shift
+done
 ensure_link_target() {
-  # 実ディレクトリを上書きせず、リンク先として安全か確認する。
-  local target="$1"
-
-  if [[ -d "$target" && ! -L "$target" ]]; then
-    printf '%s\n' "Stopped: $target is a real directory. Review it and move it aside before rerunning the installer." >&2
+  if [[ -e "$1" && ! -L "$1" ]]; then
+    printf 'Existing file or directory preserved: %s\n' "$1" >&2
     exit 1
   fi
 }
-
 cd "$ROOT"
-node "$ROOT/bin/css-guard.mjs" update --force
-
-mkdir -p "$LOCAL_BIN"
-ensure_link_target "$LOCAL_BIN/css-guard"
-
-if [[ "$CLI_ONLY" == false ]]; then
-  mkdir -p "$CLAUDE_SKILLS" "$AGENTS_SKILLS" "$CODEX_DIR"
-  ensure_link_target "$CLAUDE_SKILLS/css-guard"
-  ensure_link_target "$AGENTS_SKILLS/css-guard"
-  ln -sfn "$ROOT/skills/css-guard" "$CLAUDE_SKILLS/css-guard"
-  ln -sfn "$ROOT/skills/css-guard" "$AGENTS_SKILLS/css-guard"
-
-  # Retain unrelated hooks and settings; back up changed files.
-  node "$ROOT/scripts/merge-hooks.mjs" "$ROOT" "$ROOT/hooks/codex.hooks.template.json" "$CODEX_DIR/hooks.json"
-  node "$ROOT/scripts/merge-hooks.mjs" "$ROOT" "$ROOT/hooks/claude.settings.template.json" "$HOME/.claude/settings.json"
-  printf '%s\n' 'Claude Code: active in your next session.'
-  printf '%s\n' 'Codex: review and trust the new hooks in /hooks before they can run.'
-else
-  printf '%s\n' 'CLI installed. Load skills/css-guard/SKILL.md in your agent; no agent settings were changed.'
+if [[ "$SKIP_UPDATE" == false ]]; then
+  node "$ROOT/bin/render-guard.mjs" update --force
 fi
-
-ln -sfn "$ROOT/bin/css-guard.mjs" "$LOCAL_BIN/css-guard"
-node "$ROOT/bin/css-guard.mjs" doctor
+mkdir -p "$INSTALL_HOME/.local/bin"
+for name in render-guard css-guard gui-guard; do ensure_link_target "$INSTALL_HOME/.local/bin/$name"; done
+ln -sfn "$ROOT/bin/render-guard.mjs" "$INSTALL_HOME/.local/bin/render-guard"
+ln -sfn "$ROOT/bin/css-guard.mjs" "$INSTALL_HOME/.local/bin/css-guard"
+ln -sfn "$ROOT/engines/gui/scripts/gui-guard.py" "$INSTALL_HOME/.local/bin/gui-guard"
+chmod +x "$ROOT/bin/render-guard.mjs" "$ROOT/engines/gui/scripts/gui-guard.py"
+if [[ "$CLI_ONLY" == true ]]; then exit 0; fi
+mkdir -p "$INSTALL_HOME/.agents/skills" "$INSTALL_HOME/.claude/skills" "$INSTALL_HOME/.codex"
+for directory in "$INSTALL_HOME/.agents/skills" "$INSTALL_HOME/.claude/skills"; do
+  ensure_link_target "$directory/render-guard"
+  ln -sfn "$SKILL_DIR" "$directory/render-guard"
+  if [[ -L "$directory/css-guard" ]]; then
+    legacy_target="$(readlink "$directory/css-guard")"
+    if [[ "$legacy_target" == "$ROOT/skill" || "$legacy_target" == "$ROOT/skills/css-guard" ]]; then rm "$directory/css-guard"; fi
+  fi
+  if [[ -L "$directory/gui-guard" ]]; then
+    legacy_target="$(readlink "$directory/gui-guard")"
+    if [[ "$legacy_target" == "$INSTALL_HOME/.codex/skills/gui-guard" || "$legacy_target" == "$ROOT/engines/gui" ]]; then rm "$directory/gui-guard"; fi
+  fi
+done
+node "$ROOT/scripts/merge-hooks.mjs" "$ROOT" "$ROOT/hooks/codex.hooks.template.json" "$INSTALL_HOME/.codex/hooks.json" "$INSTALL_HOME/.codex/skills/gui-guard/scripts/gui-guard.py"
+node "$ROOT/scripts/merge-hooks.mjs" "$ROOT" "$ROOT/hooks/claude.settings.template.json" "$INSTALL_HOME/.claude/settings.json" "$INSTALL_HOME/.codex/skills/gui-guard/scripts/gui-guard.py"
+printf '%s\n' 'RenderGuard installed. Codex: review and trust the new hooks in /hooks. Claude Code: start a new session.'
