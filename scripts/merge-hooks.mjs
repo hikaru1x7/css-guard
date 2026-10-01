@@ -13,8 +13,19 @@ if (!root || !source || !target) {
   process.exit(1);
 }
 
-const ours = (hook) => typeof hook?.command === 'string' && hook.command.includes(`${root}/bin/css-guard.mjs`);
-const addition = JSON.parse(fs.readFileSync(source, 'utf8').replaceAll('__ROOT__', root));
+const script = `${root}/bin/css-guard.mjs`;
+const shellScript = /^[A-Za-z0-9_./-]+$/.test(script) ? script : `'${script.replaceAll("'", "'\\''")}'`;
+const ours = (hook) => typeof hook?.command === 'string' && (hook.command.includes(script) || hook.command.includes(shellScript));
+const addition = JSON.parse(fs.readFileSync(source, 'utf8'));
+for (const groups of Object.values(addition.hooks)) {
+  for (const group of groups) {
+    for (const hook of group.hooks || []) {
+      if (typeof hook.command === 'string') {
+        hook.command = hook.command.replaceAll('__ROOT__/bin/css-guard.mjs', shellScript);
+      }
+    }
+  }
+}
 let current = {};
 let existed = false;
 
