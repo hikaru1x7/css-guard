@@ -2,32 +2,29 @@
 
 **Less CSS guesswork. Fewer surprise changes.**
 
-You ask your AI agent to fix some spacing. It guesses at the CSS, changes a shared rule, and another part of the page shifts.
+A lightweight CSS-editing skill for AI coding agents. Install it once, then ask for CSS changes as usual. The skill guides your agent to measure the actual page, keep edits within the request, and check the result.
 
-CSS Guard gives Claude Code and Codex CLI lightweight guardrails specifically for CSS editing: measure the actual page, declare the files to change, batch related fixes, then check the same page again.
+**CSS-focused. Small instruction footprint. Built for everyday editing.**
 
-A small tool, automatic checks, and one short skill. Built to fit into everyday CSS editing.
+Measure before editing. Batch the related fixes. Check once at the end. No repeated measurement after every edit, no extra stylelint run for every change, and no required companion design skill or MCP server.
 
-## CSS-focused. Light on ceremony.
+## How you use it
 
-Measure before editing. Batch the related fixes. Check once at the end.
+After setup, ask your agent to fix spacing, sizing, alignment, or another CSS issue in ordinary language. In Claude Code and Codex, installed skills can be selected automatically when the request matches their description. If it is not selected, mention `css-guard`, use `/css-guard` in Claude Code, or `$css-guard` in Codex. See the official [Claude skill guide](https://code.claude.com/docs/en/skills) and [OpenAI skill guide](https://learn.chatgpt.com/docs/build-skills).
 
-No repeated measurement after every edit, no extra stylelint run for every change, and no required companion design skill or MCP server. The checks focus on the files, rendered measurements, and protected targets needed for the current CSS task.
+When the skill is used, the agent handles the measurement commands and checks as part of the CSS task. You do not need to run those commands yourself for each edit.
 
-The instruction file is short; the complete setup also includes Playwright and Chromium. Initial installation may take longer if Chromium needs downloading. Actual task overhead depends on the pages and viewport widths you check; speed and token savings have not been benchmarked.
+- **Measure before guessing.** Inspect rendered dimensions, computed styles, parent layout, CSS rule source candidates, and screenshots.
+- **Keep the request in view.** Declare the files to edit, preserve existing changes, and inspect effects outside the requested elements.
+- **Check the result.** Remeasure the same target, state, and viewport widths; compare configured pages and report what changed.
 
-## What it does
+The skill can be used by other agents that support skills or can read the instructions, run local commands, and inspect images. Bundled hooks add automatic edit blocking for Claude Code and Codex. Other agents follow the skill's checks without those integrations.
 
-- **Measure before guessing.** Capture element dimensions, computed styles, parent layout, CSS rule source candidates and line numbers, and screenshots.
-- **Keep edits in scope.** Reject supported edits outside declared files, edits without a recent measurement, and changes to configured protected selectors or files without approval.
-- **Check the result.** Request a new measurement of the same target, state, and viewport widths after CSS changes. Compare configured full-page screenshots too.
-- **Give the agent something to inspect.** Save PNGs for Codex's `view_image` or Claude's `Read`; no MCP server required.
+## Install once
 
-The automatic checks cover supported editing tools, not every way to write a file. They do not decide whether a design looks good or whether every changed property matches the user's intent. See [limitations](#limitations).
+Requires Git, Node.js **20.11 or newer**, npm, Bash, and an agent that can run local commands and inspect images. Developed and tested on Linux/WSL; macOS, native Windows, and other agents' end-to-end workflows have not been verified.
 
-## Install
-
-Requires Git, Node.js **20.11 or newer**, npm, Bash, and a hook-capable version of Claude Code or Codex CLI. Developed and tested on Linux/WSL; macOS and native Windows have not been verified.
+### Claude Code and Codex
 
 ```bash
 git clone https://github.com/hikaru1x7/css-guard.git
@@ -35,89 +32,39 @@ cd css-guard
 ./install.sh
 ```
 
-The installer downloads dependencies and Chromium if needed, creates `~/.local/bin/css-guard`, links the skill into `~/.agents/skills/css-guard` and `~/.claude/skills/css-guard`, and adds hooks to `~/.codex/hooks.json` and `~/.claude/settings.json`. Existing unrelated hooks and settings are retained. Changed settings files receive a `.bak.<timestamp>` backup. Rerunning the installer does not duplicate hooks from this checkout.
-
-Keep the checkout in place: the links and hooks point to it. Ensure `~/.local/bin` is on your `PATH`. If a skill directory already exists, review it and move it aside before installing; the installer refuses to overwrite real directories.
+This installs the skill, its bundled measurement tool, Chromium if needed, and the automatic hooks. It links the skill into `~/.agents/skills/css-guard` and `~/.claude/skills/css-guard`, creates `~/.local/bin/css-guard`, and adds hooks to `~/.codex/hooks.json` and `~/.claude/settings.json`. Unrelated settings and hooks are retained; changed settings receive a `.bak.<timestamp>` backup. Rerunning from the same checkout does not duplicate its hooks.
 
 - **Codex:** review and trust the new hooks in `/hooks` before they run. See the [official OpenAI hook documentation](https://learn.chatgpt.com/docs/hooks).
 - **Claude Code:** start a new session after installation. See the [official hook documentation](https://code.claude.com/docs/en/hooks).
 
-Installing only `SKILL.md` through a skills installer does **not** install the CLI, browser, or hooks. Use the full installation above.
+Keep the checkout in place and ensure `~/.local/bin` is on your `PATH`. If a skill directory already exists, review it and move it aside before installing; the installer refuses to overwrite real directories.
 
-## Use
+### Other agents
 
-Place a `css-guard.json` in the project you want to protect. Copy [css-guard.example.json](css-guard.example.json), set your development server URL, and adjust the files, widths, and routes.
-
-Automatic edit checks activate only in projects containing this configuration file. Projects without it are left alone.
-
-Ask your agent:
-
-```text
-Use $css-guard to fix this element's spacing. Keep the changes within the
-request, measure before and after, and inspect the screenshots.
-```
-
-For Claude Code, invoke `/css-guard`. The workflow is:
+From the cloned checkout, install the measurement tool without changing Claude or Codex settings, then select your agent with the [Skills CLI](https://github.com/vercel-labs/skills#install-a-skill):
 
 ```bash
-css-guard begin --scope "src/styles/app.css" --snap
-css-guard measure / "#target" --label before
-# Make related fixes together.
-css-guard measure / "#target" --label after
-css-guard snap
-css-guard verify
+./install.sh --cli-only
+npx skills add hikaru1x7/css-guard --skill css-guard
 ```
 
-Use `--snap` when full-page comparison is configured. Update scope with `css-guard scope` instead of restarting `begin`, which clears measurement records. Measurements and screenshots are saved in the project's `.css-guard/` directory; `begin` attempts to exclude it through Git's local exclude file.
+If your agent does not support skill installation, ask it to read [skills/css-guard/SKILL.md](skills/css-guard/SKILL.md) from your checkout instead. Installing only the instruction file does not install the bundled measurement tool or hooks.
 
-## Configuration
+### Project setup
 
-| Key | Purpose |
-| --- | --- |
-| `baseUrl` | Development server URL; mutually exclusive with `static` |
-| `static` | Static site directory, served by a temporary local server |
-| `widths` | Viewport widths; default `[1280, 375]` |
-| `routes` | Pages to compare with `snap` |
-| `protectedSelectors` | Shared selectors to protect, such as `:root` or `.btn`; default empty |
-| `protectedFiles` | File globs to protect; default empty |
+Place a `css-guard.json` in the project you want to work on. Use [css-guard.example.json](css-guard.example.json), set your development server URL or static-site directory, and choose viewport widths, comparison routes, and protected targets. You can ask your agent to help with this setup.
 
-Other settings: `requireScope` and `requireMeasure` (default `true`), `measureMaxAgeMin` (20), `scopeMaxAgeHours` (6), `snapThresholdPx` (0), `styleFiles`, `markupFiles`, `gateClassNames` (default `false`, opt in for Tailwind/class changes), and `heights` (viewport height by width).
+Automatic edit checks activate only in projects containing this file. Projects without it are left alone.
 
-`!important` and line-removal counts alone do not block edits. Existing `maxRemovedLines` settings are ignored. Run your project's normal code checks separately.
+## What is behind the skill
 
-## Commands
+One short instruction file, a browser measurement tool, and optional hooks. The agent uses the tool to save dimensions, style information, and PNGs in the project's `.css-guard/` directory. Chromium may need downloading during initial installation. Task overhead depends on the pages and viewport widths checked; speed and token savings have not been benchmarked.
 
-| Command | Purpose |
-| --- | --- |
-| `begin --scope <glob...> [--snap] [--static <dir>]` | Reset the task state and declare files; optionally capture baseline screenshots |
-| `scope <glob...>` | Replace the declared scope without clearing measurements |
-| `measure <url\|path> <selector> [--widths 1280,375] [--parents 2] [--actions "click:#a;wait:300"] [--label name] [--json]` | Measure the rendered target and parents; save screenshots and compare the previous measurement |
-| `snap [--baseline] [--routes ...] [--widths ...] [--json]` | Compare configured full-page screenshots; create a baseline if absent |
-| `approve <selector\|file:glob> [--minutes 120]` | Temporarily unlock a protected target after user approval |
-| `verify [--json]` | Check recorded post-edit measurement and snapshot status; exit 1 if incomplete |
-| `packet [--scope <glob...>] [--url <path>] [--selector <sel>]` | Generate CSS instructions for a delegated Codex task |
-| `status` / `doctor` | Inspect task state or installation |
+The bundled hooks reject supported edits outside declared files, edits without a recent measurement, whole-file replacement or deletion, and unapproved changes to protected targets. They request a matching post-edit measurement before the task ends.
 
-Actions support `click:`, `fill:selector=text`, `hover:`, `wait:ms`, and `goto:`. Keep the URL, selector, actions, and viewport widths consistent before and after.
+These checks are limited to supported edit paths. Direct shell writes can bypass them; internal hook errors fail open, and the Stop check blocks once for the same edit. Other agents need to review scope, protected targets, and before/after evidence through the skill. `verify` cannot validate edits that no hook recorded. Measurements and screenshot differences support inspection; they do not prove a good design or replace review of the requested change.
 
-## Delegating from Claude to Codex
-
-For CSS work, prepend `css-guard packet` output to the Codex task instructions. Use the same working tree that serves the measured page and a writable sandbox so the tool can save `.css-guard/`. Run `css-guard verify` after the delegated task returns.
-
-The Claude Bash hook checks direct writable `codex exec` commands for the packet and matching working tree. Read-only calls pass through. Non-visual work can include `<!-- css-guard: none -->`; this does not disable Codex's CSS checks.
-
-## Limitations
-
-- Edit blocking covers Claude's `Edit`/`Write` and Codex's `apply_patch`. Direct shell writes can bypass it. These hooks are workflow checks, not a security boundary.
-- Hooks fail open on internal errors, logging the error rather than stopping all work. The Stop check blocks once for the same edit, rather than creating an endless loop. Check `verify` before reporting completion.
-- The scope is file-based. The skill and diff review still need to preserve the requested elements and properties.
-- CSS rule sources are diagnostic candidates. Inline or framework-generated CSS may report page lines instead of original source-file lines; complex cascade cases need inspection.
-- Screenshot differences flag changed pixels, including expected edits. The agent still needs to inspect them; a successful measurement is not proof of a good design.
-- Delegation checks cannot see commands hidden inside wrapper scripts or destinations without `css-guard.json`.
-
-## Disable or remove
-
-To disable checks for one project, remove or rename its `css-guard.json`. To uninstall, remove only hook handlers pointing to this checkout's `bin/css-guard.mjs` from both settings files, then remove the CLI and skill links that point to this checkout. Preserve unrelated settings and other installations. Restart your agents; remove the checkout only after removing its hooks and links.
+Read the [agent operations reference](skills/css-guard/references/operations.md) for configuration, commands, source-mapping limitations, delegation, and uninstall details.
 
 ## Free to use
 

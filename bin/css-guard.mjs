@@ -147,7 +147,7 @@ async function printMeasure(result, config) {
 
   if (shots.length) {
     process.stdout.write(`Screenshots: ${shots.join(' ')}\n`);
-    process.stdout.write('Open the PNGs with view_image (Codex) or Read (Claude). Judge the rendered result as well as the numbers.\n');
+    process.stdout.write('Open the PNGs with your agent\'s image viewer (for example, view_image in Codex or Read in Claude). Judge the rendered result as well as the numbers.\n');
   }
 }
 

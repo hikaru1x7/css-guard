@@ -17,7 +17,7 @@
     "playwright": "1.62.1",
     "pngjs": "7.0.0"
   },
-  "description": "Less CSS guesswork. Fewer surprise changes. Rendered measurements and edit guardrails for Claude Code and Codex CLI.",
+  "description": "Less CSS guesswork. Fewer surprise changes. A lightweight CSS-editing skill for AI coding agents, with rendered checks and optional automatic hooks.",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
@@ -26,6 +26,7 @@
   "keywords": [
     "css",
     "agent-skills",
+    "ai-agents",
     "claude-code",
     "codex",
     "visual-regression"
