@@ -52,6 +52,8 @@ For CSS work, prepend `css-guard packet` output to the Codex task instructions. 
 
 The Claude and Codex Bash hooks check direct writable `codex exec` commands for the packet and matching working tree. Read-only calls pass through. Non-visual work can include `<!-- css-guard: none -->`; this does not disable Codex's CSS checks.
 
+The agent's command-permission checks still apply. A valid packet does not grant permission to execute a command. If a separate permission check denies it, report the denial and obtain the required approval; do not bypass it or treat the delegated task as completed.
+
 ## Limitations
 
 - Edit blocking covers Claude's `Edit`/`Write` and Codex's `apply_patch`. Direct shell writes can bypass it. These hooks are workflow checks, not a security boundary.

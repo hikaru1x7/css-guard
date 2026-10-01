@@ -22,7 +22,7 @@ The skill can be used by other agents that support skills or can read the instru
 
 ## Install once
 
-Requires Git, Node.js **20.11 or newer**, npm, Bash, and an agent that can run local commands and inspect images. Developed and tested on Linux/WSL; macOS, native Windows, and other agents' end-to-end workflows have not been verified.
+Requires Git, Node.js **20.11 or newer**, npm, Bash, and an agent that can run local commands and inspect images. Developed and tested on Linux/WSL, including browser measurements, live Claude Code edit/finish hooks, and live Claude Code/Codex delegation checks. macOS, native Windows, and other agents' end-to-end workflows have not been verified.
 
 ### Claude Code and Codex
 
