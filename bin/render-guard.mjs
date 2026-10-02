@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { checkDay } from '../lib/session-maintenance.mjs';
 import { parseEdit } from '../lib/edits.mjs';
 import { combineHooks, present } from '../lib/render-routing.mjs';
+import { documentHook, documentCommand } from '../lib/documents.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const values = process.argv.slice(2);
@@ -36,7 +37,11 @@ async function isConfigured(input) {
     let directory = path.resolve(start);
     for (;;) {
       for (const name of ['render-guard.json', 'css-guard.json', 'gui-guard.json', 'svg-guard.json']) {
-        try { await fs.access(path.join(directory, name)); return true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        try {
+          if (name !== 'render-guard.json') { await fs.access(path.join(directory, name)); return true; }
+          const config = JSON.parse(await fs.readFile(path.join(directory, name), 'utf8'));
+          if (['css', 'gui', 'svg'].some((mode) => config[mode])) return true;
+        } catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
       const parent = path.dirname(directory);
       if (parent === directory) break;
@@ -64,7 +69,9 @@ async function hook(kind) {
     await Promise.allSettled([checkDay(), run('gui', ['maintenance-check'], '', true)]);
   }
   raw = JSON.stringify(input).replace(/render-guard:\s*none/g, 'css-guard: none --> <!-- gui-guard: none');
-  const results = await Promise.all(['css', 'svg', 'gui'].map(async (mode) => {
+  const documentResult = await documentHook(kind, input);
+  const modes = kind === 'hook-post' && input.tool_name === 'Bash' ? [] : ['css', 'svg', 'gui'];
+  const results = await Promise.all(modes.map(async (mode) => {
     try {
       const result = await run(mode, [kind], raw, true);
       if (result.stdout.trim()) {
@@ -80,17 +87,21 @@ async function hook(kind) {
       return { decision: 'block', reason: `RenderGuard (${mode}): ${error.message}` };
     }
   }));
-  const output = combineHooks(kind, results);
+  const output = combineHooks(kind, [...results, documentResult]);
   if (output) process.stdout.write(JSON.stringify(output) + '\n');
 }
 
 async function main() {
   const [command, ...args] = values;
   if (!command || ['--help', '-h'].includes(command)) {
-    process.stdout.write('RenderGuard: update [--force]; css|gui|svg <command>; hook-pre|hook-post|hook-stop|hook-bash\n');
+    process.stdout.write('RenderGuard: update [--force]; css|gui|svg <command>; documents begin|verify|status; hook-pre|hook-post|hook-stop|hook-bash\n');
     return;
   }
   if (command.startsWith('hook-')) return hook(command);
+  if (command === 'documents') {
+    process.stdout.write(JSON.stringify(await documentCommand(args[0], args.slice(1)), null, 2) + '\n');
+    return;
+  }
   if (command === 'update') {
     // Keep both established updaters and their once-per-day locking.
     const results = [];
@@ -122,5 +133,8 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(`RenderGuard: ${error.message}\n`);
-  process.exitCode = values[0]?.startsWith('hook-') ? 0 : 1;
+  if (values[0]?.startsWith('hook-')) {
+    process.stdout.write(JSON.stringify(combineHooks(values[0], [{ decision: 'block', reason: `DesignGuard: ${error.message}` }])) + '\n');
+    process.exitCode = 0;
+  } else process.exitCode = 1;
 });

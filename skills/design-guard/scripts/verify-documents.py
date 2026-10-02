@@ -21,6 +21,30 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def validate_measurement(record, comparisons):
+    targets = record.get('targets', [])
+    names = [t.get('name') for t in targets]
+    if len(targets) < 2 or len(set(names)) != len(names) or not all(names):
+        raise ValueError('Distinct measured targets and comparisons required.')
+    if not set(comparisons).issubset(names) or len(set(comparisons)) >= len(names):
+        raise ValueError('Separate requested targets and comparisons required.')
+    for target in targets:
+        boxes = [(k, target[k]) for k in ('screenBoxPx', 'frameBoxPt', 'textBoxPt', 'paintedBoxPt') if target.get(k) is not None]
+        if not boxes:
+            raise ValueError('Actual target bounds required.')
+        for kind, box in boxes:
+            if len(box) != 4 or not all(math.isfinite(float(v)) for v in box):
+                raise ValueError('Invalid target bounds.')
+            width, height = (box[2] - box[0], box[3] - box[1]) if kind == 'paintedBoxPt' else box[2:]
+            if width < 0 or height < 0 or width + height <= 0:
+                raise ValueError('Empty target bounds.')
+    if not record.get('images'):
+        raise ValueError('Native/rendered images required.')
+    for image in record['images']:
+        if digest(local_path(image['path'])) != image['sha256']:
+            raise ValueError('Missing or modified evidence image.')
+
+
 def verify(before, after, source, comparisons, tolerance=0, allow_page_count=False):
     if not comparisons or not math.isfinite(tolerance) or tolerance < 0:
         raise ValueError('Declare comparison names and a finite nonnegative tolerance.')
@@ -38,11 +62,7 @@ def verify(before, after, source, comparisons, tolerance=0, allow_page_count=Fal
     if not allow_page_count and before.get('pageCount') != after.get('pageCount'):
         raise ValueError('Page/slide count changed; review the affected pages.')
     for record in (before, after):
-        if not record.get('images'):
-            raise ValueError('Native/rendered images required.')
-        for image in record['images']:
-            if digest(local_path(image['path'])) != image['sha256']:
-                raise ValueError('Missing or modified evidence image.')
+        validate_measurement(record, comparisons)
     old = {t['name']: t for t in before['targets']}
     new = {t['name']: t for t in after['targets']}
     if len(old) != len(before['targets']) or len(new) != len(after['targets']) or old.keys() != new.keys():
@@ -69,7 +89,8 @@ def verify(before, after, source, comparisons, tolerance=0, allow_page_count=Fal
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--before', required=True)
+    parser.add_argument('--before')
+    parser.add_argument('--new', action='store_true', help='For outputs that did not exist at the guarded batch start.')
     parser.add_argument('--after', required=True)
     parser.add_argument('--source', required=True)
     parser.add_argument('--comparison', action='append', required=True)
@@ -78,8 +99,19 @@ def main():
     args = parser.parse_args()
     try:
         read = lambda p: json.loads(Path(p).read_text(encoding='utf-8-sig'))
-        print(json.dumps(verify(read(args.before), read(args.after), args.source,
-                                args.comparison, args.max_drift, args.allow_page_count_change)))
+        if args.new:
+            if args.before:
+                raise ValueError('New output cannot supply a fabricated before measurement.')
+            after = read(args.after)
+            if local_path(after['source']).resolve() != Path(args.source).resolve() or after['sourceSha256'] != digest(args.source):
+                raise ValueError('New evidence does not match current source.')
+            validate_measurement(after, args.comparison)
+            print(json.dumps({'evidenceChecksPassed': True, 'newOutput': True, 'visualReviewRequired': True}))
+        else:
+            if not args.before:
+                raise ValueError('Existing outputs require --before.')
+            print(json.dumps(verify(read(args.before), read(args.after), args.source,
+                                    args.comparison, args.max_drift, args.allow_page_count_change)))
     except (KeyError, TypeError, ValueError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

@@ -1,5 +1,5 @@
 {
-  "description": "RenderGuard CSS/GUI/SVG",
+  "description": "DesignGuard CSS/GUI/SVG and native document evidence",
   "hooks": {
     "PreToolUse": [
       {
@@ -25,7 +25,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "apply_patch",
+        "matcher": "apply_patch|Bash",
         "hooks": [
           {
             "type": "command",

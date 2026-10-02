@@ -71,7 +71,7 @@ SVG requires a unique requested target and a separate unchanged comparison. It c
 
 ## Native documents
 
-Word/PPTX use read-only Microsoft-native position and image adapters; directly authored PDFs use Poppler/Pillow. Finish with fresh source/image evidence checks and visual review. See [methods, examples and repository research](docs/DOCUMENT-GUARDS.md). Office/PDF do not yet have dedicated automatic edit hooks; their measured workflow is required by the skill, not mechanically enforced across every editing route.
+Word/PPTX use read-only Microsoft-native position and image adapters; directly authored PDFs use Poppler/Pillow. The same shared hooks used for CSS/GUI/SVG now check configured documents: measured before, declared scope, fresh after and a visual-review record before completion. Hooks never launch Office or render PDFs. See [configuration, methods, examples and limits](docs/DOCUMENT-GUARDS.md). Reinstall the hooks and review changed Codex definitions in `/hooks`; registration alone is not activation.
 
 ## Daily maintenance
 

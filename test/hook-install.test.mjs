@@ -24,6 +24,7 @@ for (const directory of ['css-guard', 'CSS Guard team\'s "folder" $example']) {
         const expected = Object.values(original.hooks).flatMap((groups) => groups.flatMap((group) => group.hooks)).length;
         assert.equal(expected, 4);
         assert.ok(original.hooks.PreToolUse.some((group) => group.matcher === 'Bash' && group.hooks.some((hook) => hook.command.endsWith(' hook-bash'))));
+        assert.equal(original.hooks.PostToolUse.filter((group) => group.matcher.split('|').includes('Bash')).length, 1);
 
         for (let attempt = 0; attempt < 2; attempt++) {
           const merged = spawnSync(process.execPath, [path.join(repo, 'scripts/merge-hooks.mjs'), root, path.join(repo, 'hooks', template), target], { encoding: 'utf8' });

@@ -48,7 +48,17 @@ Synthetic GUI protocol fixtures and actual Windows adapter tests are different c
 
 The skill entry now combines the two former skills while reading only the applicable mode. Japanese ordinary instructions fell from 3,137 to 2,117 characters for CSS, and from 4,889 to 2,445 for GUI. This is instruction-size comparison, not a latency, token-use or design-quality benchmark. Creation instructions are excluded from revision routing.
 
-The established CSS/GUI/SVG measurement and protection behavior and hook entry commands are preserved. Installer tests cover migration to the single skill while preserving unrelated settings. Dedicated Office/PDF edit hooks are not implemented.
+The established CSS/GUI/SVG measurement and protection behavior and hook entry commands are preserved. Installer tests cover migration to the single skill while preserving unrelated settings. Office/PDF now use a branch of the same hooks; updated post-hook matchers need trust review before automatic use.
+
+## Shared document hook checks (2026-10-02)
+
+Ten added integration tests exercise real PDF rendering, before/after source hashes, declared scope, retained baselines, comparison movement, stale measurements after generator edits, image changes, explicit creation mode, unknown-generator changes at Stop, configuration drift/removal, file-edit tools and canonical Bash routing. All 57 Node tests pass in both checkouts; the three real PDF adapter tests also pass. A visual-review record is an attestation, not machine proof of image opening or correct design.
+
+The shared post-Bash branch checks only document files/records and does not relaunch the CSS/SVG/GUI engines or a renderer. Do not infer universal interception of arbitrary unconfigured outputs or every cloud execution surface from these tests.
+
+Microsoft Word 16.0 and PowerPoint 16.0 were remeasured through the new hook workflow: before-edit denial, begin, allowed edit, Stop rejection, fresh native after, actual image opening, then verify and Stop success. Word moved 24px and PPT frame/text moved 18pt; comparisons were unchanged and measurement did not alter sources. A directly authored PDF passed the same workflow after images were opened. These are helper/CLI integration checks, not proof of automatic hooks on every agent surface.
+
+Twenty document-branch pre-Bash calls averaged about 0.47ms without configuration and 1.94ms with a one-page PDF in this environment. These figures exclude process startup, existing engines and large-file hashing.
 
 Microsoft Word 16.0 and PowerPoint 16.0 on Windows were actually measured read-only before/after an 18-point move. Word screen bounds moved 24 pixels; PowerPoint frame and text bounds both moved 18 points, with unchanged comparisons and native images inspected. Word diagnostic Range.Information missed indent movement, so it is not used alone. PDF tests cover actual text and non-text pixels, cropped/rotated pages and stale/modified evidence refusals. See [methods and limitations](DOCUMENT-GUARDS.md). These are simple fixtures, not validation of arbitrary complex Office documents.
 

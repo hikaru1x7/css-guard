@@ -24,7 +24,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|Bash",
         "hooks": [
           {
             "type": "command",
@@ -46,5 +46,5 @@
       }
     ]
   },
-  "description": "RenderGuard CSS/GUI/SVG"
+  "description": "DesignGuard CSS/GUI/SVG and native document evidence"
 }

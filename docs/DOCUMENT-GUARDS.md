@@ -70,7 +70,52 @@ python3 <skill>/scripts/verify-documents.py --source file.pdf --before evidence/
 
 Works with Office records too. WSL maps Windows drive paths to /mnt. Checks current source hash, both sets of image hashes, fresh measurement identity, unchanged renderer/version/DPI, matching targets, and unchanged comparison positions/text/pages. Use `--allow-page-count-change` only for a user-requested change after checking affected pages. Explicitly justified drift uses `--max-drift`; do not mix screen pixels with document points when choosing tolerance.
 
-This verifies evidence, not requested design correctness or visual review. Existing CSS/GUI/SVG automatic hooks remain; dedicated Office/PDF automatic edit hooks are not implemented. Do not claim all editing routes are mechanically blocked.
+This standalone check verifies evidence, not requested design correctness or visual review. Normal project work uses the following document branch of the shared hooks.
+
+## Shared document hooks
+
+Documents use the same four entrypoints as CSS/GUI/SVG: before file edits, before Bash, after edits and at Stop. No separate hooks are registered for each format. PostToolUse now also matches Bash; reinstall and review changed Codex definitions in `/hooks`. Registration, trust and observed automatic execution are separate facts.
+
+Add only needed outputs to the project's `render-guard.json`. Register scripts that generate visual output in `sources`. All paths are project-relative; outputs and evidence paths must be distinct.
+
+```json
+{
+  "documents": {
+    "files": [{
+      "path": "report.pdf",
+      "before": "evidence/before.json",
+      "after": "evidence/after.json",
+      "comparisons": ["comparison"]
+    }],
+    "sources": ["generate.py"],
+    "measureMaxAgeMin": 20
+  }
+}
+```
+
+Word/PPTX use the same configuration with Microsoft-native measurement. Measure the requested target separately from comparisons. User-authorized exceptions may set `maxDrift` (Word px; PPT/PDF pt) or `allowPageCountChange: true` per output, with the reason recorded in the project. Never relax these midway just to pass.
+
+```bash
+# Measure existing before and inspect images
+render-guard documents begin --scope report.pdf generate.py
+# Batch requested edits, measure after, open every image
+render-guard documents verify --review evidence/review.json
+render-guard documents status
+```
+
+For an output that does not exist, use `begin --scope report.pdf generate.py --create`. No fictitious before image is required; verify the completed output and comparisons. Existing outputs still require before. File scope is not permission to change unrelated content. Restarting begin cannot erase pending work. Scope lasts six hours; before/after evidence defaults to a twenty-minute freshness window. Preserve the baseline and report unfinished long-running work.
+
+After opening images, record each current output hash, every after-image hash and concrete observations:
+
+```json
+{"documents":[{"path":"report.pdf","sourceSha256":"<after.sourceSha256>","images":["<after.images[0].sha256>"],"observations":["Checked target clipping and comparison alignment in the image"]}]}
+```
+
+This review is an attestation, not machine proof that images were opened or design quality is correct. Hooks check current source/image hashes, measurement times, targets, comparisons and renderer versions, retaining the original baseline. Configuration drift, out-of-scope changes, stale after evidence, modified images and edits after verify invalidate completion.
+
+Hooks only inspect configuration/files/records; they never launch Office, render PDFs or repeat network updates per edit. The shared Bash post-hook runs only the document branch, avoiding three extra engine processes. First Bash establishes a watch baseline; post-hooks inspect file timestamps; Stop and explicit verification perform needed hash checks.
+
+Unknown generators in configured projects are caught at Stop if outputs change. This does not fully capture arbitrary scripts indirectly writing unconfigured outputs, edits outside the agent or every cloud execution environment. Configure only visual outputs/sources to avoid pulling unrelated content-only work into the guard. Unavailable native measurement remains unverified; do not substitute another renderer or hand-entered positions.
 
 ## Repository research and primary sources
 
