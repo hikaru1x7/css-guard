@@ -66,6 +66,7 @@ test('combined installation migrates owned legacy hooks and skills without chang
     }
     await fs.mkdir(path.join(home, '.agents/skills'), { recursive: true });
     await fs.symlink(path.join(repo, 'skill'), path.join(home, '.agents/skills/css-guard'));
+    await fs.symlink(path.join(repo, 'skill'), path.join(home, '.agents/skills/render-guard'));
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = spawnSync('bash', [path.join(repo, 'install.sh'), '--skip-update', '--home', home], { encoding: 'utf8' });
       assert.equal(result.status, 0, result.stderr);
@@ -78,7 +79,29 @@ test('combined installation migrates owned legacy hooks and skills without chang
         assert.equal(handlers.filter((hook) => hook.command === 'echo unrelated').length, 1);
       }
     }
-    await fs.access(path.join(home, '.agents/skills/render-guard/SKILL.md'));
+    await fs.access(path.join(home, '.agents/skills/design-guard/SKILL.md'));
     assert.equal(await fs.lstat(path.join(home, '.agents/skills/css-guard')).catch(() => null), null);
+    assert.equal(await fs.lstat(path.join(home, '.agents/skills/render-guard')).catch(() => null), null);
+    await fs.access(path.join(home, '.claude/skills/design-guard/SKILL.md'));
+  } finally { await fs.rm(home, { recursive: true, force: true }); }
+});
+
+
+test('installation preserves unrelated skill links', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'design-guard-preserve-'));
+  try {
+    const skills = path.join(home, '.agents/skills');
+    await fs.mkdir(skills, { recursive: true });
+    const unrelated = path.join(home, 'custom-skill');
+    await fs.mkdir(unrelated);
+    await fs.symlink(unrelated, path.join(skills, 'render-guard'));
+    const installed = spawnSync('bash', [path.join(repo, 'install.sh'), '--skip-update', '--home', home], { encoding: 'utf8' });
+    assert.equal(installed.status, 0, installed.stderr);
+    assert.equal(await fs.readlink(path.join(skills, 'render-guard')), unrelated);
+    await fs.unlink(path.join(skills, 'design-guard'));
+    await fs.symlink(unrelated, path.join(skills, 'design-guard'));
+    const refused = spawnSync('bash', [path.join(repo, 'install.sh'), '--skip-update', '--home', home], { encoding: 'utf8' });
+    assert.notEqual(refused.status, 0);
+    assert.equal(await fs.readlink(path.join(skills, 'design-guard')), unrelated);
   } finally { await fs.rm(home, { recursive: true, force: true }); }
 });

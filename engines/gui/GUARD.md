@@ -1,6 +1,6 @@
 # GUI configuration and measurement
 
-RenderGuard retains the established GUI engine and its evidence format. Use `render-guard gui <command>`. Existing `gui-guard.json`, `.gui-guard/` and `GUI_GUARD_HOME` remain supported; a new project can put the same settings under `gui` in `render-guard.json`.
+DesignGuard retains the established RenderGuard GUI engine and its evidence format. Use `render-guard gui <command>`. Existing `gui-guard.json`, `.gui-guard/` and `GUI_GUARD_HOME` remain supported; a new project can put the same settings under `gui` in `render-guard.json`.
 
 ## Project settings
 

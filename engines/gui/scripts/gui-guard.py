@@ -793,7 +793,7 @@ def main():
         print('Requested and comparison targets: ' + ', '.join(cfg['measurement']['targets']))
         print('Measure the actual screen and text before and after; open the PNGs. Batch related edits, build, deploy the authorized runtime copy, run after, then verify. Preserve scope and report unverified work.')
         installation = Path(__file__).resolve().parents[3]
-        skill = installation / 'skills/render-guard' if (installation / 'skills/render-guard').is_dir() else installation / 'skill'
+        skill = installation / 'skills/design-guard' if (installation / 'skills/design-guard').is_dir() else installation / 'skill'
         print('Instructions: ' + str(skill / 'references/gui.md'))
     elif args.command == 'doctor':
         print('Configuration checked: ' + str(root))

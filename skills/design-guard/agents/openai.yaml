@@ -1,0 +1,3 @@
+interface:
+  display_name: "DesignGuard"
+  short_description: "Guard visual edits and measure actual output across media"

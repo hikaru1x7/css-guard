@@ -76,4 +76,4 @@ The agent's command-permission checks still apply. A valid packet does not grant
 
 ## Disable or remove
 
-Remove a project's CSS section or legacy `css-guard.json` to disable its CSS checks. For the combined installation, remove only handlers pointing to this checkout's `bin/render-guard.mjs`, then remove the `render-guard` skill and CLI links belonging to this checkout. Preserve unrelated settings and other installations. Restart agents before deleting the checkout. Legacy CSS/GUI CLI aliases are compatibility tools, not separate skills.
+Remove a project's CSS section or legacy `css-guard.json` to disable its CSS checks. For the combined installation, remove only handlers pointing to this checkout's `bin/render-guard.mjs`, then remove the `design-guard` skill and CLI links belonging to this checkout. Preserve unrelated settings and other installations. Restart agents before deleting the checkout. Legacy CSS/GUI CLI aliases are compatibility tools, not separate skills.

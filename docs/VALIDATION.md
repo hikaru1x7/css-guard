@@ -42,3 +42,18 @@ python3 engines/gui/scripts/test_session_maintenance.py
 ```
 
 Synthetic GUI protocol fixtures and actual Windows adapter tests are different checks. High DPI, Qt/Tk, custom drawing, other native operating systems and live agent hook activation require separate validation. Registering new Codex hooks does not prove they are trusted; review `/hooks`. Maintenance reuse reads small local records and performs no repeated network check, but total hook latency and token savings have not been benchmarked.
+
+
+## DesignGuard integration and document measurement (2026-10-02)
+
+The skill entry now combines the two former skills while reading only the applicable mode. Japanese ordinary instructions fell from 3,137 to 2,117 characters for CSS, and from 4,889 to 2,445 for GUI. This is instruction-size comparison, not a latency, token-use or design-quality benchmark. Creation instructions are excluded from revision routing.
+
+The established CSS/GUI/SVG measurement and protection behavior and hook entry commands are preserved. Installer tests cover migration to the single skill while preserving unrelated settings. Dedicated Office/PDF edit hooks are not implemented.
+
+Microsoft Word 16.0 and PowerPoint 16.0 on Windows were actually measured read-only before/after an 18-point move. Word screen bounds moved 24 pixels; PowerPoint frame and text bounds both moved 18 points, with unchanged comparisons and native images inspected. Word diagnostic Range.Information missed indent movement, so it is not used alone. PDF tests cover actual text and non-text pixels, cropped/rotated pages and stale/modified evidence refusals. See [methods and limitations](DOCUMENT-GUARDS.md). These are simple fixtures, not validation of arbitrary complex Office documents.
+
+```bash
+npm test
+npm run test:documents
+RENDER_GUARD_FORWARD_TEST=1 python3 engines/gui/scripts/test_gui_guard.py
+```

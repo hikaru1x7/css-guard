@@ -5,7 +5,7 @@ CLI_ONLY=false
 SKIP_UPDATE=false
 INSTALL_HOME="$HOME"
 SKILL_DIR="$ROOT/skill"
-if [[ -d "$ROOT/skills/render-guard" ]]; then SKILL_DIR="$ROOT/skills/render-guard"; fi
+if [[ -d "$ROOT/skills/design-guard" ]]; then SKILL_DIR="$ROOT/skills/design-guard"; fi
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cli-only) CLI_ONLY=true ;;
@@ -34,8 +34,16 @@ chmod +x "$ROOT/bin/render-guard.mjs" "$ROOT/engines/gui/scripts/gui-guard.py"
 if [[ "$CLI_ONLY" == true ]]; then exit 0; fi
 mkdir -p "$INSTALL_HOME/.agents/skills" "$INSTALL_HOME/.claude/skills" "$INSTALL_HOME/.codex"
 for directory in "$INSTALL_HOME/.agents/skills" "$INSTALL_HOME/.claude/skills"; do
-  ensure_link_target "$directory/render-guard"
-  ln -sfn "$SKILL_DIR" "$directory/render-guard"
+  ensure_link_target "$directory/design-guard"
+  if [[ -L "$directory/design-guard" && "$(readlink "$directory/design-guard")" != "$SKILL_DIR" ]]; then
+    printf 'Unrelated skill link preserved: %s\n' "$directory/design-guard" >&2
+    exit 1
+  fi
+  ln -sfn "$SKILL_DIR" "$directory/design-guard"
+  if [[ -L "$directory/render-guard" ]]; then
+    legacy_target="$(readlink "$directory/render-guard")"
+    if [[ "$legacy_target" == "$ROOT/skill" || "$legacy_target" == "$ROOT/skills/render-guard" || "$legacy_target" == "$SKILL_DIR" ]]; then rm "$directory/render-guard"; fi
+  fi
   if [[ -L "$directory/css-guard" ]]; then
     legacy_target="$(readlink "$directory/css-guard")"
     if [[ "$legacy_target" == "$ROOT/skill" || "$legacy_target" == "$ROOT/skills/css-guard" ]]; then rm "$directory/css-guard"; fi
@@ -47,4 +55,4 @@ for directory in "$INSTALL_HOME/.agents/skills" "$INSTALL_HOME/.claude/skills"; 
 done
 node "$ROOT/scripts/merge-hooks.mjs" "$ROOT" "$ROOT/hooks/codex.hooks.template.json" "$INSTALL_HOME/.codex/hooks.json" "$INSTALL_HOME/.codex/skills/gui-guard/scripts/gui-guard.py"
 node "$ROOT/scripts/merge-hooks.mjs" "$ROOT" "$ROOT/hooks/claude.settings.template.json" "$INSTALL_HOME/.claude/settings.json" "$INSTALL_HOME/.codex/skills/gui-guard/scripts/gui-guard.py"
-printf '%s\n' 'RenderGuard installed. Codex: review and trust the new hooks in /hooks. Claude Code: start a new session.'
+printf '%s\n' 'DesignGuard installed. Codex: review and trust the new hooks in /hooks. Claude Code: start a new session.'

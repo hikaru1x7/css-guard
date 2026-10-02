@@ -1,5 +1,5 @@
 {
-  "name": "render-guard",
+  "name": "design-guard",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,8 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "test:gui": "python3 engines/gui/scripts/test_gui_guard.py",
-    "test:gui-routing": "RENDER_GUARD_FORWARD_TEST=1 python3 engines/gui/scripts/test_gui_guard.py"
+    "test:gui-routing": "RENDER_GUARD_FORWARD_TEST=1 python3 engines/gui/scripts/test_gui_guard.py",
+    "test:documents": "python3 test/documents_test.py"
   },
   "engines": {
     "node": ">=20.11"
@@ -20,11 +21,11 @@
     "playwright": "1.63.0",
     "pngjs": "7.0.0"
   },
-  "description": "Measure rendered CSS, GUI and SVG changes and guard the requested edit scope.",
+  "description": "Preserve requested visual changes, measure native/rendered results, and review new designs.",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hikaru1x7/render-guard.git"
+    "url": "git+https://github.com/hikaru1x7/design-guard.git"
   },
   "keywords": [
     "css",
@@ -33,6 +34,10 @@
     "agent-skills",
     "claude-code",
     "codex",
-    "visual-regression"
+    "visual-regression",
+    "word",
+    "powerpoint",
+    "pdf",
+    "design"
   ]
 }

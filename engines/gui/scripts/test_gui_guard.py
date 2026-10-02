@@ -398,6 +398,8 @@ class GuardTest(unittest.TestCase):
         command = 'codex exec --sandbox workspace-write --cd ' + str(self.root) + " 'fix GUI'"
         self.denied(self.hook('bash', tool='Bash', data={'command': command}))
         packet = self.cli('packet').stdout
+        instructions = packet.strip().splitlines()[-1].split(': ', 1)[1]
+        self.assertTrue(Path(instructions).is_file(), instructions)
         import shlex
         self.assertIsNone(self.hook('bash', tool='Bash', data={'command': 'codex exec --sandbox workspace-write --cd ' + str(self.root) + ' ' + shlex.quote(packet)}))
         self.denied(self.hook('bash', tool='Bash', data={'command': command.replace('fix GUI', '<!-- gui-guard packet v1 root=/wrong -->')}))
@@ -519,7 +521,7 @@ class GuardTest(unittest.TestCase):
             self.assertEqual(first, (home / '.claude/settings.json').read_text())
             settings = g.read(home / '.claude/settings.json')
             self.assertEqual(settings['env'], keep['env'])
-            self.assertTrue((home / '.claude/skills/render-guard').is_symlink())
+            self.assertTrue((home / '.claude/skills/design-guard').is_symlink())
             self.assertEqual(len(settings['hooks']['PreToolUse']), 2)
             self.assertEqual(settings['hooks']['Stop'][0], keep['hooks']['Stop'][0])
             for event, groups in settings['hooks'].items():

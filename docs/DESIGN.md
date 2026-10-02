@@ -17,3 +17,10 @@ SVG measures geometry separately from painted pixels. Comparison geometry, compu
 Installation replaces this checkout's legacy CSS/GUI hook commands with four combined handlers, preserving unrelated settings and backing up changes. Codex registration and trust are separate. Compatibility CLI names and existing project adapter paths may remain without a standalone skill. Old packet markers remain accepted for existing delegation workflows.
 
 Verification covers existing CSS behavior, common-entry parity, GUI tests directly and through routing, SVG browser checks/refusals and installation preservation. GUI protocol fixtures are synthetic; actual Windows control tests separately cover Native, UIAutomation and WinAppCLI at 96 DPI. Other environments require project validation.
+
+
+## DesignGuard skill routing
+
+The single design-guard skill combines RenderGuard and Design Quality. Ordinary revisions read the short shared guard plus the applicable measurement references. Only from-scratch creation reads create.md; setup and repository research are conditional. User instructions and approved work remain authoritative.
+
+Existing CSS/GUI/SVG measurement and protection behavior, CLI/configuration names and trusted hook commands remain in use. Office/PDF add read-only measurement adapters and evidence verification, not dedicated automatic edit hooks. Desktop Office requires its intended Microsoft renderer, not HTML or converted-PDF certification. See [document methods and research](DOCUMENT-GUARDS.md).

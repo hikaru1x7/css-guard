@@ -4,5 +4,5 @@ node_modules/
 .guard-maintenance.json
 
 .render-guard/
-**/.runtime/
+**/.runtime
 **/__pycache__/
