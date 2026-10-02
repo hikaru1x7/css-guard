@@ -52,6 +52,8 @@ The established CSS/GUI/SVG measurement and protection behavior and hook entry c
 
 ## Shared document hook checks (2026-10-02)
 
+The maintainer confirmed completion of the local Codex trust review for the final shared-hook definitions. Those definitions remained unchanged afterward. This resolves the local pending trust step; it does not establish automatic execution on every agent surface or remove the trust review required for other installations. This follow-up changes documentation only; implementation was already published in commit `076149f`.
+
 Ten added integration tests exercise real PDF rendering, before/after source hashes, declared scope, retained baselines, comparison movement, stale measurements after generator edits, image changes, explicit creation mode, unknown-generator changes at Stop, configuration drift/removal, file-edit tools and canonical Bash routing. All 57 Node tests pass in both checkouts; the three real PDF adapter tests also pass. A visual-review record is an attestation, not machine proof of image opening or correct design.
 
 The shared post-Bash branch checks only document files/records and does not relaunch the CSS/SVG/GUI engines or a renderer. Do not infer universal interception of arbitrary unconfigured outputs or every cloud execution surface from these tests.

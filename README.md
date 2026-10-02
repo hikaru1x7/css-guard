@@ -59,23 +59,23 @@ GUI uses `render-guard gui begin → build → after → verify`; source-based a
 
 ## Configure a project
 
-New projects use `render-guard.json` with the needed `css`, `gui` and/or `svg` sections. See [the example](render-guard.example.json). Existing `css-guard.json` and `gui-guard.json`, state folders and measurements remain usable; conversion is optional. A unified section takes precedence over the matching legacy configuration.
+New projects use `render-guard.json` with only the needed `css`, `gui`, `svg` and/or `documents` sections. See [the screen example](render-guard.example.json) and [document configuration](docs/DOCUMENT-GUARDS.md). Existing `css-guard.json` and `gui-guard.json`, state folders and measurements remain usable; conversion is optional. A unified section takes precedence over the matching legacy configuration.
 
 - [CSS workflow and configuration](skills/design-guard/references/css.md)
 - [GUI workflow](skills/design-guard/references/gui.md) and [adapter/settings details](engines/gui/GUARD.md)
 - [SVG workflow and configuration](skills/design-guard/references/svg.md)
 
-CSS saves its established evidence in `.css-guard/`; GUI keeps `.gui-guard/`. SVG uses `.render-guard/svg/` separately, preventing cross-mode overwrite. Automatic gates activate only in configured projects.
+CSS saves its established evidence in `.css-guard/`; GUI keeps `.gui-guard/`. SVG uses `.render-guard/svg/` and documents use `.render-guard/documents/`, preventing cross-mode overwrite. Full scope/evidence checks require project configuration; named writes to unconfigured DOCX/PPTX/PDF outputs are rejected before editing.
 
 SVG requires a unique requested target and a separate unchanged comparison. It compares measured geometry/styles/markup and captured comparison pixels. Geometry boxes do not represent every stroke/filter/glyph pixel; inspect PNGs for clipping and painting outside bounds.
 
 ## Native documents
 
-Word/PPTX use read-only Microsoft-native position and image adapters; directly authored PDFs use Poppler/Pillow. The same shared hooks used for CSS/GUI/SVG now check configured documents: measured before, declared scope, fresh after and a visual-review record before completion. Hooks never launch Office or render PDFs. See [configuration, methods, examples and limits](docs/DOCUMENT-GUARDS.md). Reinstall the hooks and review changed Codex definitions in `/hooks`; registration alone is not activation.
+Word/PPTX use read-only Microsoft-native position and image adapters; directly authored PDFs use Poppler/Pillow. The same shared hooks used for CSS/GUI/SVG now check configured documents: measured before for existing outputs, declared scope, fresh after and a visual-review record before completion. Explicit `--create` handles outputs that do not yet exist without fabricated before evidence. Hooks never launch Office or render PDFs. See [configuration, methods, examples and limits](docs/DOCUMENT-GUARDS.md). Reinstall the hooks and review changed Codex definitions in `/hooks`; registration alone is not activation.
 
 ## Daily maintenance
 
-The first skill or relevant before-edit/Bash hook use checks both toolchains' stable-version metadata. Tasks, projects, edits and mode changes in the same day reuse the records. Current versions skip installation, browser launches and full test runs. Hooks do not perform heavy updates. Run update before measurement when newer dependencies are required; keep versions fixed throughout before/after comparison.
+For CSS/GUI/SVG, the first skill or relevant before-edit/Bash hook use checks both toolchains' stable-version metadata. PDF image measurements reuse the private Pillow runtime and its daily GUI maintenance record; document-only hooks perform evidence checks without triggering browser/GUI maintenance. Tasks, projects, edits and mode changes in the same day reuse the records. Current versions skip installation, browser launches and full test runs. Hooks do not perform heavy updates. Run update before measurement when newer dependencies are required; keep versions fixed throughout before/after comparison.
 
 The operating system’s local calendar date selects a small shared record. Session IDs are not needed for maintenance. Existing CSS/GUI maintenance caches are retained. Concurrent calls avoid duplicate checks; failures do not retry automatically. Installation or an explicit retry uses `update --force`. `install.sh --skip-update` only registers a previously validated environment.
 
