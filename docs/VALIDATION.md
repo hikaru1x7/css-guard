@@ -1,5 +1,15 @@
 # RenderGuard validation
 
+## Scoped GUI checks and safe retry reuse (2026-10-02)
+
+Small GUI changes can use preconfigured suites selected by a unique exact file-scope match. Missing/ambiguous mappings keep all checks. The plan and validation code are frozen at begin, shared build sources remain tracked, and profile dependency lists cannot remove common inputs. Refresh cannot hide shared-source edits. Legacy pending records without the original plan cannot be backfilled into a pass.
+
+after always takes a fresh live capture. Reuse is limited to explicitly configured leading checks that read captured measurements and fixed inputs; version, source, inputs, evidence, image and control data must still match within the validity period. Live interaction, saving and other-screen checks always rerun. Regression-screen suites and default legacy configurations do not reuse checks. Unchanged command arrays remain supported, and the ordinary workflow adds no commands.
+
+The Japanese source tests cover scope fallback, manual-selection refusal, shared-source edits, code/config changes during capture, altered/expired evidence, changed images, repeated failure, live-stage reruns, extensionless symlink inputs and retained legacy records. Snapshot-only fixtures demonstrate 12 checks versus a preconfigured 3-check suite and 11 reused completed checks after a final-stage failure. These synthetic command counts do not establish a production GUI speedup. Read-only comparison of the same 30 inputs and hashes over ten alternating runs reduced collection median from about 494ms to 386ms in one WSL environment; actual application build/capture/operation times remain unmeasured.
+
+The public implementation keeps English messages and the same runtime structure as the validated source. Publication validation passed 70 direct GUI tests, 70 common-entry GUI tests and 57 Node/browser/document checks. Skill metadata, diff checks and language-independent implementation/test structure comparisons also passed. Node checks used the existing private Python 3.12 runtime through a test-only PATH override; system Python and dependency settings were not changed. Hook definitions, trust records, user applications and notification settings are unchanged. These checks do not establish automatic hook activation or production-app verification.
+
 Checked on 2026-10-02 on Ubuntu/WSL with Windows, Node.js 22 and Python 3.12.
 
 ## Preserved behavior

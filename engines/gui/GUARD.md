@@ -56,6 +56,33 @@ render-guard gui verify --project /source/project
 
 Use `scope --scope <files...>` for scope changes. `refresh` can refresh an unchanged baseline, but refuses changed sources/executables. `status`, `doctor`, `packet` and time-limited `approve` retain their established behavior. Do not restart begin to erase unchecked edits. Build, after and verify invalidate stale source, binary, config, adapter, evidence or check receipts.
 
+## Small-fix scope and retries
+
+Prepare optional `profiles` during project configuration maintenance. `begin --scope Phone.cs` selects a profile only when exactly one `scopeFiles` set matches the declared files. Missing or ambiguous matches run the full suite. There is no manual profile argument. after, verify and hooks keep the selected plan; changes outside its GUI sources or in shared `build.sourceFiles` are refused. Declare all affected files at the start for shared-component changes.
+
+```json
+"profiles": {
+  "phone": {
+    "scopeFiles": ["Phone.cs"],
+    "measurement": {"command": ["python3", "measure-phone.py", "{label}", "{nonce}"], "targets": ["recipient", "save"], "outputDirectory": "measurements", "expectedExecutable": "/path/to/App.exe"},
+    "checks": [["python3", "check-phone.py"]],
+    "evidence": ["measurements/phone-check.json"],
+    "validationFiles": ["phone-measure-helper.py"],
+    "regression": []
+  }
+}
+```
+
+Only these six fields and `snapshotChecks` are allowed. `scopeFiles` is mandatory; measurement replacements must be complete definitions. Other fields inherit defaults, except `validationFiles` adds dependencies without removing shared ones and `snapshotChecks` defaults to zero per profile. Each suite must cover its screen, comparison controls, relevant operations and effects. Measuring the main window alone does not establish a dialog's before state. Do not create or weaken mappings to pass the current edit.
+
+begin freezes configuration and measurement/validation code; pre-edit, after and verify refuse changes during the comparison. Application source edits remain separately tracked by version and scope. Fix validation defects separately from screen edits. `refresh` can remeasure only while all tracked sources, including shared build inputs, and the executable remain unchanged. Preserve edited baselines and report unresolved verification instead of clearing records.
+
+after always takes a fresh live measurement. Optional `snapshotChecks: 2` declares that the first two checks read only captured image/control data and fixed inputs. Checks using capture timestamps/IDs, external state, live application state, another screen, interaction or saving are ineligible and must follow the snapshot prefix. They rerun even after success. A Python command is not inherently a snapshot-only check.
+
+Completed eligible checks are reused automatically only with matching source, binary, inputs, config, baseline, guard engine, unchanged evidence/logs, and a fresh image and all measurement fields except timestamp/ID. Reuse expires after `measureMaxAgeMin` (default 20 minutes). Image/input changes or any regression comparison require all checks again. Failures invalidate the receipt; verify cannot pass before every stage completes. `after --fresh` forces all checks for diagnosis; ordinary workflows do not need it. Suites without eligible checks incur no checkpoint/evidence hashing after each check.
+
+The CLI displays before measurement, build, after measurement, additional comparisons, individual check and total after durations. The usual begin → build → after → verify workflow is unchanged. Mapping coverage, indirect inputs and snapshot eligibility must be reviewed during configuration maintenance; the engine cannot prove arbitrary validation-code semantics or that images were opened. Legacy comparisons without a frozen plan cannot run after; preserve their evidence. Completed legacy receipts retain existing identity/evidence checks, and subsequent edits require a new begin. Pending unchanged legacy baselines may use refresh; edited ones need their missing before verification resolved.
+
 ## Explicitly requested window dimensions
 
 Before/after window dimensions normally must match. When the user explicitly requests a size change, configure:

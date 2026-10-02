@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Native GUI gate for Codex and Claude; project commands never use a shell."""
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import datetime as dt
 import hashlib
 import importlib.metadata
@@ -57,12 +57,38 @@ def command_valid(command):
     return isinstance(command, list) and bool(command) and all(isinstance(x, str) and x for x in command)
 
 
-def config(root):
+def config(root, profile=None, use_state=True):
     cfg = read(config_path(root))
     if config_path(root).name == 'render-guard.json':
         cfg = cfg['gui']
     if not isinstance(cfg, dict):
         raise ValueError('GUI configuration must be a JSON object.')
+    if profile is None and use_state and state_path(root).exists():
+        profile = read(state_path(root)).get('profile')
+    if profile is not None:
+        selected = cfg.get('profiles', {}).get(profile)
+        allowed = {'scopeFiles', 'measurement', 'checks', 'evidence', 'validationFiles', 'regression', 'snapshotChecks'}
+        if not isinstance(selected, dict) or set(selected) - allowed:
+            raise ValueError('Missing or invalid GUI validation profile: ' + str(profile))
+        scope_files = selected.get('scopeFiles')
+        if (not isinstance(scope_files, list) or not scope_files
+                or not all(isinstance(name, str) for name in scope_files)
+                or len(scope_files) != len(set(scope_files))
+                or not set(scope_files).issubset(cfg.get('files', []))):
+            raise ValueError('Declare distinct configured GUI sources in profile.scopeFiles.')
+        definition = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()
+        if use_state and state_path(root).exists():
+            saved = read(state_path(root))
+            if saved.get('profile') == profile and saved.get('profileDefinition') != definition:
+                raise ValueError('Validation profile changed after begin. Do not change checks during a comparison.')
+        validation = cfg.get('validationFiles', []) + selected.get('validationFiles', [])
+        # A new suite must declare its own snapshot prefix; never inherit the
+        # default suite's cache permission or drop shared indirect dependencies.
+        cfg.update(selected)
+        cfg['validationFiles'] = list(dict.fromkeys(validation))
+        cfg['snapshotChecks'] = selected.get('snapshotChecks', 0)
+        cfg['_profile'] = profile
+        cfg['_profileDefinition'] = definition
     files = cfg.get('files')
     if not isinstance(files, list) or not files or not all(isinstance(x, str) for x in files) or len(files) != len(set(files)):
         raise ValueError('List distinct GUI source files in files.')
@@ -80,6 +106,9 @@ def config(root):
         raise ValueError('List the requested and comparison controls, at least two distinct targets.')
     if not cfg.get('checks') or not all(command_valid(c) for c in cfg['checks']):
         raise ValueError('Configure at least one actual-screen validation command in checks.')
+    count = cfg.get('snapshotChecks', 0)
+    if type(count) is not int or not 0 <= count <= len(cfg['checks']):
+        raise ValueError('snapshotChecks must be the number of leading checks that read only captured measurement inputs.')
     for key in ['binary', 'copyRoot']:
         if not cfg.get(key):
             raise ValueError(key + ' is not configured')
@@ -93,6 +122,19 @@ def config(root):
     for pattern in cfg.get('protectedPatterns', []):
         re.compile(pattern)
     return cfg
+
+
+def config_for_scope(root, scope):
+    cfg = config(root, use_state=False)
+    # The executor cannot pick an easier suite. Only one configured, exact file
+    # scope may match; missing or ambiguous coverage falls back to every check.
+    profiles = cfg.get('profiles', {})
+    if not isinstance(profiles, dict):
+        raise ValueError('profiles must map names to validation definitions.')
+    matched = [name for name, item in profiles.items()
+               if isinstance(item, dict) and isinstance(item.get('scopeFiles'), list)
+               and set(item['scopeFiles']) == set(scope or [])]
+    return config(root, matched[0], use_state=False) if len(matched) == 1 else cfg
 
 
 def config_path(root):
@@ -114,28 +156,74 @@ def copy_names(cfg):
     return set(cfg['files'] + cfg.get('build', {}).get('sourceFiles', []))
 
 
+def source_inputs(root, cfg):
+    return {name: digest(root / name) if (root / name).is_file() else None
+            for name in sorted(copy_names(cfg))}
+
+
+def validation_inputs(root, cfg, inputs=None):
+    app_sources = {str(local_path(name, root)) for name in copy_names(cfg)}
+    return {name: value for name, value in (input_files(root, cfg) if inputs is None else inputs).items()
+            if name not in app_sources}
+
+
+def check_plan(root, cfg, state, inputs=None):
+    if not state.get('receipt') and ('configHashAtStart' not in state or 'validationAtStart' not in state):
+        raise ValueError('A legacy comparison has no frozen validation plan. Preserve pending changes and reestablish the before verification.')
+    if state.get('configHashAtStart') and state['configHashAtStart'] != digest(config_path(root)):
+        raise ValueError('GUI validation configuration changed after begin. Do not change conditions mid-comparison.')
+    if state.get('validationAtStart') is not None and state['validationAtStart'] != validation_inputs(root, cfg, inputs):
+        raise ValueError('Measurement or validation code changed after begin. Separate screen edits from validation maintenance.')
+    # A focused suite cannot certify changes in another screen or shared build
+    # source, even if those changes were made through a shell instead of hooks.
+    if cfg.get('_profile'):
+        baseline = state.get('sourceInputsAtStart', state['sources'])
+        current = source_inputs(root, cfg)
+        if any(current.get(name) != expected for name, expected in baseline.items()
+               if name not in cfg['scopeFiles']):
+            raise ValueError('Source outside the selected profile changed.')
+
+
+@contextmanager
+def timed(label):
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        print(label + ': %.2f seconds' % (time.monotonic() - started), flush=True)
+
+
 def artifacts(paths):
     return {str(local_path(p)): digest(p) for p in paths}
 
 
 def input_files(root, cfg):
-    paths = {local_path(p, root) for p in cfg.get('validationFiles', [])}
-    paths.update(local_path(p, root) for p in cfg.get('build', {}).get('sourceFiles', []))
+    # Resolve each possible input once per collection, not every command word.
+    # Do not cache across calls: changed contents and symlink targets stay visible.
+    resolved = {}
+    def resolve(value):
+        if value not in resolved:
+            resolved[value] = local_path(value, root)
+        return resolved[value]
+    paths = {resolve(p) for p in cfg.get('validationFiles', [])}
+    paths.update(resolve(p) for p in cfg.get('build', {}).get('sourceFiles', []))
     commands = [cfg['measurement']['command'], *cfg['checks']]
     if cfg.get('build'):
         commands.append(cfg['build']['command'])
-    generated = {local_path(p, root) for p in cfg.get('evidence', [])}
+    generated = {resolve(p) for p in cfg.get('evidence', [])}
     for command in commands:
         for arg in command:
             if '{' not in arg and not arg.startswith('-'):
-                path = local_path(arg, root)
+                path = resolve(arg)
                 if path in generated or re.match(r'^guard-(?:before|after)(?:-\d+)?\.(?:json|png)$', path.name):
                     continue
                 if path.is_file() and path.suffix.lower() in ['.py', '.ps1', '.sh', '.js', '.mjs', '.json', '.cs', '.dll']:
                     paths.add(path)
     for screen in cfg.get('regression', []):
         paths.update(Path(p) for p in input_files(root, {'measurement': screen['measurement'], 'checks': []}))
-    return artifacts(paths)
+    # These paths have already been resolved. Re-read every file, but avoid
+    # resolving the same Windows path a second time just to name the record.
+    return {str(path): digest(path) for path in paths}
 
 
 def run(command, root, timeout=120):
@@ -189,7 +277,10 @@ def validate_bounds(row):
 def measure(root, cfg, label):
     directory = local_path(cfg['measurement']['outputDirectory'], root)
     paths = [directory / (label + '.json'), directory / (label + '.png')]
-    nonce, start, inputs = uuid.uuid4().hex, time.time(), input_files(root, cfg)
+    # begin/after compare the complete validation plan around the whole operation.
+    # Here compare only this capture's own inputs, including its target definition.
+    measurement_cfg = {'measurement': cfg['measurement'], 'checks': []}
+    nonce, start, inputs = uuid.uuid4().hex, time.time(), input_files(root, measurement_cfg)
     command = [p.replace('{label}', label).replace('{nonce}', nonce) for p in cfg['measurement']['command']]
     run(command, root, cfg.get('commandTimeoutSeconds', 120))
     data = read(paths[0])
@@ -217,7 +308,7 @@ def measure(root, cfg, label):
         raise ValueError('Measured window and screenshot dimensions differ.')
     if any(p.stat().st_mtime < start - 1 for p in paths):
         raise ValueError('Image or measurement predates this measurement run.')
-    if inputs != input_files(root, cfg):
+    if inputs != input_files(root, measurement_cfg):
         raise ValueError('Measurement or validation code changed during measurement.')
     return {'label': label, 'files': artifacts(paths), 'targets': sorted(names),
             'screen': {k: data[k] for k in ['dpiX', 'dpiY']} | {k: data['window'][k] for k in ['width', 'height']},
@@ -226,7 +317,7 @@ def measure(root, cfg, label):
                          'provider': data.get('provider'), 'measurementTool': data.get('measurementTool'),
                          'imageComparator': importlib.metadata.version('Pillow') if cfg.get('regression') else None,
                          'definition': hashlib.sha256(json.dumps(cfg['measurement'], sort_keys=True).encode()).hexdigest(),
-                         'inputs': input_files(root, {'measurement': cfg['measurement'], 'checks': []})}}
+                         'inputs': inputs}}
 
 
 def active_path(session):
@@ -290,13 +381,17 @@ def verify(root):
     receipt = state.get('receipt')
     if not receipt:
         raise ValueError('GUI changes have not been remeasured and checked. Run render-guard gui after.')
+    inputs = input_files(root, cfg)
+    check_plan(root, cfg, state, inputs)
+    if receipt.get('engine') and receipt['engine'] != digest(Path(__file__)):
+        raise ValueError('GUI guard code changed after verification. Recheck with the latest engine.')
     if receipt['configHash'] != digest(config_path(root)):
         raise ValueError('GUI configuration changed after verification.')
     if receipt['sources'] != sources(root, cfg):
         raise ValueError('GUI source changed after verification. Remeasure the latest version.')
     if receipt['binary'] != digest(local_path(cfg['binary'], root)):
         raise ValueError('Executable changed after verification. Remeasure the latest version.')
-    if receipt['validation'] != input_files(root, cfg):
+    if receipt['validation'] != inputs:
         raise ValueError('Measurement or validation code changed. Validate the latest version again.')
     for name in copy_names(cfg):
         if digest(root / name) != digest(local_path(cfg['copyRoot'], root) / name):
@@ -317,7 +412,8 @@ def build(root, cfg):
         if digest(local_path(cfg['copyRoot'], root) / name) != expected:
             raise ValueError('Source and runtime copy differ before build: ' + name)
     started_ns = time.time_ns()
-    run(cfg['build']['command'], root, cfg.get('commandTimeoutSeconds', 120))
+    with timed('Build'):
+        run(cfg['build']['command'], root, cfg.get('commandTimeoutSeconds', 120))
     if initial != sources(root, cfg) or inputs != input_files(root, cfg):
         raise ValueError('Source or validation code changed during build.')
     for name, expected in build_sources.items():
@@ -369,21 +465,55 @@ def regression_compare(root, cfg, before, current):
     return files | artifacts([report])
 
 
-def after(root):
+def after(root, resume=True):
     cfg, state = config(root), read(state_path(root))
     if state.get('version') != VERSION:
         raise ValueError('Old records cannot be reused. Start a measured task with begin.')
+    if 'configHashAtStart' not in state or 'validationAtStart' not in state:
+        raise ValueError('A legacy comparison has no frozen validation plan. Preserve pending changes and reestablish the before verification.')
     state.pop('receipt', None)
+    previous_progress = state.pop('progress', {})
     write(state_path(root), state)
+    cache_enabled = cfg.get('snapshotChecks', 0) > 0 and not cfg.get('regression')
     initial, binary = sources(root, cfg), digest(local_path(cfg['binary'], root))
     inputs, cfg_hash = input_files(root, cfg), digest(config_path(root))
+    check_plan(root, cfg, state, inputs)
     if cfg.get('runtime', 'compiled') == 'compiled':
         built = read(root / '.gui-guard' / 'build.json')
         if built['sources'] != initial or built['binary'] != binary:
             raise ValueError('Latest sources have not been built. Run render-guard gui build.')
         if built['buildSources'] != {name: digest(root / name) for name in copy_names(cfg)}:
             raise ValueError('Build inputs changed.')
-    measured = measure(root, cfg, 'guard-after')
+    # Check existing evidence before overwriting the measurement files. Always
+    # capture the live screen; only completed checks may be reused afterwards.
+    cached_artifacts_valid = True
+    try:
+        if cache_enabled and resume:
+            check_hashes(previous_progress.get('artifacts', {}))
+            check_hashes(previous_progress.get('checks', {}))
+    except ERRORS:
+        cached_artifacts_valid = False
+    check_hashes(state['before']['files'])
+    with timed('After measurement'):
+        measured = measure(root, cfg, 'guard-after')
+    if initial != sources(root, cfg) or binary != digest(local_path(cfg['binary'], root)) or inputs != input_files(root, cfg) or cfg_hash != digest(config_path(root)):
+        raise ValueError('Source, executable or validation configuration changed during measurement.')
+    key = None
+    if cache_enabled:
+        display = read(next(p for p in measured['files'] if p.endswith('.json')))
+        display.pop('measurementId', None)
+        display.pop('measuredAt', None)
+        key = {'sources': initial, 'binary': binary, 'inputs': inputs, 'config': cfg_hash,
+               'baseline': state['before'], 'engine': digest(Path(__file__)),
+               'display': hashlib.sha256(json.dumps(display, sort_keys=True).encode()).hexdigest(),
+               'image': next(h for p, h in measured['files'].items() if p.endswith('.png'))}
+    progress = previous_progress if cache_enabled and resume else {}
+    fresh = time.time() - progress.get('startedAt', 0) <= cfg.get('measureMaxAgeMin', 20) * 60
+    if progress.get('key') != key or not fresh or not cached_artifacts_valid or cfg.get('regression'):
+        progress = {}
+    if not progress:
+        progress = {'key': key, 'startedAt': time.time(), 'checks': {}, 'artifacts': {}}
+    progress['artifacts'].update(measured['files'])
     if not screen_matches(state['before']['screen'], measured['screen'], cfg, state) or measured['state'] != state['before']['state']:
         raise ValueError('Window width, height, DPI or state changed between measurements.')
     if measured['targets'] != state['before']['targets']:
@@ -400,15 +530,30 @@ def after(root):
             before_identity[key] = value
     if measured['identity'] != before_identity:
         raise ValueError('Application, measurement tool or target definitions changed between measurements.')
-    regression = regression_compare(root, cfg, state.get('regression', {}), regression_measure(root, cfg, 'guard-after'))
-    checks, evidence = {}, [local_path(p, root) for p in cfg.get('evidence', [])]
-    started = time.time()
+    if cache_enabled:
+        state['progress'] = progress
+        write(state_path(root), state)
+    with timed('Additional screen comparison') if cfg.get('regression') else nullcontext():
+        regression = regression_compare(root, cfg, state.get('regression', {}), regression_measure(root, cfg, 'guard-after'))
+    checks, evidence = dict(progress['checks']), [local_path(p, root) for p in cfg.get('evidence', [])]
+    started = progress['startedAt']
     for index, command in enumerate(cfg['checks']):
         log = root / '.gui-guard' / ('check-%d.log' % index)
-        log.write_text(run(command, root, cfg.get('commandTimeoutSeconds', 120)), encoding='utf-8')
+        if index < cfg.get('snapshotChecks', 0) and str(log) in checks:
+            print('Check %d/%d: already complete' % (index + 1, len(cfg['checks'])), flush=True)
+            continue
+        with timed('Check %d/%d' % (index + 1, len(cfg['checks']))):
+            output = run(command, root, cfg.get('commandTimeoutSeconds', 120))
+        log.write_text(output, encoding='utf-8')
         checks[str(log)] = digest(log)
+        if cache_enabled and index < cfg['snapshotChecks']:
+            progress['checks'][str(log)] = checks[str(log)]
+            progress['artifacts'].update(artifacts([p for p in evidence if p.is_file() and p.stat().st_mtime >= started - 1]))
+            state['progress'] = progress
+            write(state_path(root), state)
     if initial != sources(root, cfg) or binary != digest(local_path(cfg['binary'], root)) or inputs != input_files(root, cfg) or cfg_hash != digest(config_path(root)):
-        raise ValueError('Source, executable or validation settings changed during measurement or checks.')
+        raise ValueError('Source, executable or validation configuration changed during measurement or validation.')
+    check_hashes(measured['files'])
     for path in evidence:
         if path.stat().st_mtime < started - 1:
             raise ValueError('Evidence was not produced by the current check: ' + str(path))
@@ -424,7 +569,8 @@ def after(root):
     report = root / '.gui-guard' / 'comparison.json'
     write(report, differences)
     state['receipt'] = {'sources': initial, 'binary': binary, 'configHash': cfg_hash, 'validation': inputs,
-                        'artifacts': artifacts([*measured['files'], *evidence, report]) | regression, 'checks': checks, 'verifiedAt': time.time()}
+                        'artifacts': artifacts([*measured['files'], *evidence, report]) | regression,
+                        'engine': digest(Path(__file__)), 'checks': checks, 'verifiedAt': time.time()}
     write(state_path(root), state)
     verify(root)
     link(root, session_id(), cfg, touched=True)
@@ -526,6 +672,7 @@ def pre(root, cfg, entries):
     state = read(state_path(root))
     if state.get('version') != VERSION:
         raise ValueError('Old measurement format. Start a measured task with begin.')
+    check_plan(root, cfg, state)
     for entry in entries:
         name = entry['path'].relative_to(root).as_posix()
         if name not in state['scope']:
@@ -699,12 +846,15 @@ def add_ignore(root):
 
 
 def begin(root, cfg, scope, refresh=False):
-    if not scope or not set(scope).issubset(cfg['files']):
+    if not scope or not set(scope).issubset(cfg.get('scopeFiles', cfg['files'])):
         raise ValueError('Declare all requested files from the configured GUI sources with --scope.')
     if state_path(root).exists():
         previous = read(state_path(root))
         if refresh:
-            if previous.get('sources') != sources(root, cfg) or previous.get('binaryAtStart') != digest(local_path(cfg['binary'], root)):
+            if (previous.get('sources') != sources(root, cfg)
+                    or (previous.get('sourceInputsAtStart') is not None
+                        and previous['sourceInputsAtStart'] != source_inputs(root, cfg))
+                    or previous.get('binaryAtStart') != digest(local_path(cfg['binary'], root))):
                 raise ValueError('Cannot replace the before measurement after edits. Use after to check the changes.')
         elif previous.get('version') == VERSION:
             verify(root)
@@ -714,17 +864,22 @@ def begin(root, cfg, scope, refresh=False):
                 raise ValueError('The previous version has unchecked edits. Do not clear records and restart begin.')
             for section in [previous['before']['files'], receipt['artifacts'], receipt['checks']]:
                 check_hashes(section)
-    initial = sources(root, cfg)
+    initial, config_at_start = sources(root, cfg), digest(config_path(root))
+    validation, source_baseline = validation_inputs(root, cfg), source_inputs(root, cfg)
     for name in copy_names(cfg):
         expected = digest(root / name) if (root / name).is_file() else None
         if expected is not None and digest(local_path(cfg['copyRoot'], root) / name) != expected:
             raise ValueError('Source and runtime copy differ before measurement: ' + name)
-    before = measure(root, cfg, 'guard-before')
-    regression = regression_measure(root, cfg, 'guard-before')
-    if initial != sources(root, cfg):
-        raise ValueError('Source changed during the before measurement.')
-    write(state_path(root), {'version': VERSION, 'scope': scope, 'before': before, 'regression': regression, 'startedAt': time.time(), 'sources': initial,
-                            'binaryAtStart': digest(local_path(cfg['binary'], root))})
+    print('Validation scope: %s (%d checks)' % (cfg.get('_profile', 'all screens'), len(cfg['checks'])), flush=True)
+    with timed('Before measurement'):
+        before = measure(root, cfg, 'guard-before')
+        regression = regression_measure(root, cfg, 'guard-before')
+    if (initial != sources(root, cfg) or source_baseline != source_inputs(root, cfg)
+            or validation != validation_inputs(root, cfg) or config_at_start != digest(config_path(root))):
+        raise ValueError('Source, validation configuration or code changed during the before measurement.')
+    write(state_path(root), {'version': VERSION, 'profile': cfg.get('_profile'), 'profileDefinition': cfg.get('_profileDefinition'), 'configHashAtStart': config_at_start, 'scope': scope, 'before': before, 'regression': regression, 'startedAt': time.time(), 'sources': initial,
+                            'binaryAtStart': digest(local_path(cfg['binary'], root)),
+                            'validationAtStart': validation, 'sourceInputsAtStart': source_baseline})
     link(root, session_id(), cfg)
     add_ignore(root)
     print('GUI scope and before measurement recorded. Open the actual images for inspection.')
@@ -736,6 +891,7 @@ def main():
     parser.add_argument('token', nargs='?')
     parser.add_argument('--project', default='.')
     parser.add_argument('--scope', nargs='+')
+    parser.add_argument('--fresh', action='store_true')
     parser.add_argument('--minutes', type=float, default=120)
     parser.add_argument('--session')
     parser.add_argument('--force', action='store_true')
@@ -761,13 +917,15 @@ def main():
             result = update_day(perform_update)
             print(json.dumps(result, ensure_ascii=False))
         return
-    cfg = config(root)
+    if args.fresh and args.command != 'after':
+        raise ValueError('--fresh is only supported by after.')
+    cfg = config_for_scope(root, args.scope) if args.command == 'begin' else config(root)
     if args.command in ['begin', 'refresh']:
         begin(root, cfg, args.scope, refresh=args.command == 'refresh')
     elif args.command in ['scope', 'approve']:
         state = read(state_path(root))
         if args.command == 'scope':
-            if not args.scope or not set(args.scope).issubset(cfg['files']):
+            if not args.scope or not set(args.scope).issubset(cfg.get('scopeFiles', cfg['files'])):
                 raise ValueError('Specify the GUI files to include in scope.')
             state['scope'] = args.scope
         else:
@@ -782,7 +940,8 @@ def main():
     elif args.command == 'build':
         build(root, cfg)
     elif args.command == 'after':
-        after(root)
+        with timed('after total'):
+            after(root, resume=not args.fresh)
     elif args.command == 'verify':
         verify(root)
         print('RenderGuard GUI verification passed.')

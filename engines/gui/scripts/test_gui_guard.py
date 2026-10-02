@@ -160,6 +160,294 @@ class GuardTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
 
+    def test_profile_limits_checks_and_preserves_source_boundary(self):
+        (self.root / 'check.py').write_text("raise RuntimeError('unrelated check must not run')")
+        (self.root / 'focused.py').write_text("print('focused screen check passed')")
+        self.cfg['profiles'] = {'phone': {
+            'scopeFiles': ['View.cs'], 'checks': [[sys.executable, 'focused.py']],
+            'evidence': [], 'validationFiles': [], 'regression': []}}
+        self.save_config()
+        self.cli('begin', '--scope', 'View.cs')
+        self.assertEqual(g.read(g.state_path(self.root))['profile'], 'phone')
+        self.assertNotEqual(self.cli('scope', '--scope', 'Other.cs', ok=False).returncode, 0)
+        self.assertNotEqual(self.cli('after', '--profile', 'phone', ok=False).returncode, 0)
+        self.edit()
+        self.complete()
+        (self.root / 'Other.cs').write_text('unexpected change')
+        (self.root / 'copy/Other.cs').write_text('unexpected change')
+        self.cli('build')
+        self.assertIn('outside', self.cli('after', ok=False).stderr)
+
+    def test_profile_cannot_weaken_protection_or_change_mid_comparison(self):
+        self.cfg['profiles'] = {'phone': {'scopeFiles': ['View.cs'], 'protectedFiles': []}}
+        self.save_config()
+        self.assertNotEqual(self.cli('begin', '--scope', 'View.cs', ok=False).returncode, 0)
+        del self.cfg['profiles']['phone']['protectedFiles']
+        self.save_config()
+        self.cli('begin', '--scope', 'View.cs')
+        self.cfg['profiles']['phone']['checks'] = [[sys.executable, '-c', "print('weaker check')"]]
+        self.save_config()
+        self.assertIn('after begin', self.cli('after', ok=False).stderr)
+
+    def test_ambiguous_profile_falls_back_to_all_checks(self):
+        self.cfg['profiles'] = {
+            'phone': {'scopeFiles': ['View.cs'], 'checks': [[sys.executable, '-c', 'print(1)']]},
+            'easy': {'scopeFiles': ['View.cs'], 'checks': [[sys.executable, '-c', 'print(2)']]}}
+        (self.root / 'check.py').write_text("raise RuntimeError('full checks were retained')")
+        self.save_config()
+        self.begin()
+        self.assertIsNone(g.read(g.state_path(self.root))['profile'])
+        self.edit()
+        self.cli('build')
+        self.assertIn('full checks were retained', self.cli('after', ok=False).stderr)
+
+    def test_unmatched_profile_and_manual_selection_cannot_skip_checks(self):
+        self.cfg['profiles'] = {'phone': {'scopeFiles': ['Other.cs'],
+            'checks': [[sys.executable, '-c', 'print(1)']]}}
+        (self.root / 'check.py').write_text("raise RuntimeError('full checks were retained')")
+        self.save_config()
+        self.assertNotEqual(self.cli('begin', '--scope', 'View.cs', '--profile', 'phone', ok=False).returncode, 0)
+        self.begin()
+        self.edit()
+        self.cli('build')
+        self.assertIn('full checks were retained', self.cli('after', ok=False).stderr)
+
+    def setup_retry(self, snapshot_checks=1):
+        (self.root / 'first.py').write_text(
+            "from pathlib import Path; p=Path('count'); "
+            "p.write_text(str(int(p.read_text())+1) if p.exists() else '1'); "
+            "Path('evidence.txt').write_text('current screen evidence')")
+        (self.root / 'last.py').write_text(
+            "from pathlib import Path; assert Path('ready').exists(), 'temporary failure'")
+        self.cfg['checks'] = [[sys.executable, 'first.py'], [sys.executable, 'last.py']]
+        self.cfg['evidence'] = ['evidence.txt']
+        self.cfg['snapshotChecks'] = snapshot_checks
+        self.save_config()
+        self.begin()
+        self.edit()
+        self.cli('build')
+        self.cli('after', ok=False)
+        self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+        self.assertEqual((self.root / 'count').read_text(), '1')
+        (self.root / 'ready').touch()
+
+    def test_resume_reuses_only_completed_current_build_stages(self):
+        self.setup_retry()
+        old_nonce = g.read(self.root / 'measurements/guard-after.json')['measurementId']
+        result = self.cli('after')
+        self.cli('verify')
+        self.assertEqual((self.root / 'count').read_text(), '1')
+        self.assertNotEqual(g.read(self.root / 'measurements/guard-after.json')['measurementId'], old_nonce)
+        self.assertIn('already complete', result.stdout)
+
+    def test_default_retry_reuses_checks_but_changed_live_image_forces_all_checks(self):
+        self.setup_retry()
+        self.cli('after')
+        self.assertEqual((self.root / 'count').read_text(), '1')
+        self.behaviour['pixel'] = True
+        self.save_behaviour()
+        self.cli('after')
+        self.assertEqual((self.root / 'count').read_text(), '2')
+        self.cli('verify')
+
+    def test_regression_screens_disable_check_reuse(self):
+        self.cfg['regression'] = [{'measurement': self.cfg['measurement'], 'allowedTargets': ['target']}]
+        self.setup_retry()
+        self.cli('after')
+        self.assertEqual((self.root / 'count').read_text(), '2')
+        self.cli('verify')
+
+    def test_configuration_change_during_baseline_is_rejected(self):
+        with (self.root / 'adapter.py').open('a') as handle:
+            handle.write("\np=root/'gui-guard.json'; cfg=json.loads(p.read_text()); cfg['checks']=[[sys.executable,'-c','print(1)']]; p.write_text(json.dumps(cfg))")
+        self.assertIn('validation configuration', self.cli('begin', '--scope', 'View.cs', ok=False).stderr)
+
+    def test_checker_change_during_capture_is_rejected_by_whole_operation(self):
+        with (self.root / 'adapter.py').open('a') as handle:
+            handle.write("\nif label=='guard-after': (root/'check.py').write_text(\"print('replaced check')\")")
+        self.begin()
+        self.cli('build')
+        self.assertIn('validation configuration', self.cli('after', ok=False).stderr)
+        self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+
+    def test_legacy_pending_plan_cannot_be_backfilled_or_erase_completed_receipt(self):
+        self.begin()
+        self.complete()
+        state = g.read(g.state_path(self.root))
+        del state['configHashAtStart']
+        del state['validationAtStart']
+        g.write(g.state_path(self.root), state)
+        self.assertIn('legacy comparison', self.cli('after', ok=False).stderr)
+        self.assertEqual(g.read(g.state_path(self.root))['receipt'], state['receipt'])
+        self.cli('verify')
+        del state['receipt']
+        g.write(g.state_path(self.root), state)
+        self.denied(self.hook('pre'))
+        self.assertNotEqual(self.cli('after', ok=False).returncode, 0)
+        self.assertEqual(g.read(g.state_path(self.root))['before'], state['before'])
+
+    def test_full_check_configuration_is_frozen_after_begin(self):
+        self.begin()
+        self.cfg['checks'] = [[sys.executable, '-c', "print('skip the real check')"]]
+        self.save_config()
+        self.assertIn('validation configuration', self.cli('after', ok=False).stderr)
+        self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+
+    def test_repeated_resume_failure_keeps_completed_stages(self):
+        self.setup_retry()
+        (self.root / 'ready').unlink()
+        self.cli('after', ok=False)
+        self.cli('after', ok=False)
+        self.assertEqual((self.root / 'count').read_text(), '1')
+        (self.root / 'ready').touch()
+        self.cli('after')
+        self.cli('verify')
+        self.assertEqual((self.root / 'count').read_text(), '1')
+
+    def test_fresh_measurement_failure_discards_previous_progress(self):
+        self.setup_retry()
+        self.behaviour['state'] = True
+        self.save_behaviour()
+        self.cli('after', ok=False)
+        self.assertNotEqual(self.cli('after', ok=False).returncode, 0)
+        self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+
+    def test_retry_rechecks_changed_source_and_rejects_changed_checker(self):
+        for changed in ['View.cs', 'first.py']:
+            with self.subTest(changed=changed):
+                if (self.root / 'count').exists():
+                    self.cli('begin', '--scope', 'View.cs')
+                    self.cli('build')
+                    (self.root / 'ready').unlink()
+                    self.cli('after', ok=False)
+                    (self.root / 'ready').touch()
+                else:
+                    self.setup_retry()
+                count = int((self.root / 'count').read_text())
+                path = self.root / changed
+                path.write_text(path.read_text() + (' updated' if changed.endswith('.cs') else "\nprint('updated checker')"))
+                if changed.endswith('.cs'):
+                    (self.root / 'copy' / changed).write_text(path.read_text())
+                    self.cli('build')
+                if changed.endswith('.cs'):
+                    self.cli('after')
+                    self.assertEqual(int((self.root / 'count').read_text()), count + 1)
+                    self.cli('verify')
+                else:
+                    self.assertIn('validation code', self.cli('after', ok=False).stderr)
+                    self.assertEqual(int((self.root / 'count').read_text()), count)
+                    self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+
+    def test_resume_rejects_tampered_or_expired_evidence(self):
+        self.setup_retry()
+        (self.root / 'evidence.txt').write_text('tampered')
+        self.cli('after')
+        self.assertEqual((self.root / 'count').read_text(), '2')
+        state = g.read(g.state_path(self.root))
+        state['progress']['startedAt'] = 0
+        g.write(g.state_path(self.root), state)
+        self.cli('after')
+        self.assertEqual((self.root / 'count').read_text(), '3')
+        self.cli('verify')
+
+    def test_legacy_live_checks_are_never_reused(self):
+        # Same main window does not establish the state of a different dialog.
+        self.setup_retry(snapshot_checks=0)
+        self.assertNotIn('progress', g.read(g.state_path(self.root)))
+        self.cli('after')
+        self.assertEqual((self.root / 'count').read_text(), '2')
+        self.cli('verify')
+
+    def test_live_stage_reruns_after_a_later_failure(self):
+        self.setup_retry()
+        self.cli('after')
+        self.cli('begin', '--scope', 'View.cs')
+        (self.root / 'live.py').write_text(
+            "from pathlib import Path; p=Path('live-count'); "
+            "p.write_text(str(int(p.read_text())+1) if p.exists() else '1')")
+        self.cfg['checks'].insert(1, [sys.executable, 'live.py'])
+        self.save_config()
+        self.cli('refresh', '--scope', 'View.cs')
+        (self.root / 'ready').unlink()
+        self.cli('build')
+        self.cli('after', ok=False)
+        (self.root / 'ready').touch()
+        self.cli('after')
+        self.assertEqual((self.root / 'live-count').read_text(), '2')
+        self.cli('verify')
+
+    def test_profile_preserves_shared_dependencies_and_rejects_common_source_changes(self):
+        for path in [self.root / 'Shared.cs', self.root / 'copy/Shared.cs']:
+            path.write_text('shared source')
+        (self.root / 'helper.json').write_text('{}')
+        self.cfg['build']['sourceFiles'] = ['View.cs', 'Other.cs', 'Shared.cs']
+        self.cfg['validationFiles'] = ['helper.json']
+        self.cfg['profiles'] = {'phone': {'scopeFiles': ['View.cs'], 'validationFiles': []}}
+        self.save_config()
+        self.begin()
+        self.assertIn(str(self.root / 'helper.json'), g.validation_inputs(self.root, g.config(self.root)))
+        self.edit()
+        for path in [self.root / 'Shared.cs', self.root / 'copy/Shared.cs']:
+            path.write_text('shared change')
+        self.assertNotEqual(self.cli('refresh', '--scope', 'View.cs', ok=False).returncode, 0)
+        self.cli('build')
+        self.assertIn('outside', self.cli('after', ok=False).stderr)
+        self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+
+    def test_checker_changes_block_before_edit_and_refresh_keeps_baseline_safe(self):
+        self.begin()
+        original = (self.root / 'check.py').read_text()
+        (self.root / 'check.py').write_text("print('weaker check')")
+        self.denied(self.hook('pre'))
+        self.assertIn('validation code', self.cli('after', ok=False).stderr)
+        self.cli('refresh', '--scope', 'View.cs')
+        self.assertIsNone(self.hook('pre'))
+        self.edit()
+        (self.root / 'check.py').write_text(original)
+        self.assertNotEqual(self.cli('refresh', '--scope', 'View.cs', ok=False).returncode, 0)
+        self.assertNotEqual(self.cli('after', ok=False).returncode, 0)
+
+    def test_profile_cannot_inherit_snapshot_permission_for_new_checks(self):
+        self.cfg['snapshotChecks'] = 1
+        self.cfg['profiles'] = {'phone': {'scopeFiles': ['View.cs']}}
+        self.save_config()
+        self.begin()
+        self.assertEqual(g.config(self.root)['snapshotChecks'], 0)
+
+    def test_snapshot_count_must_be_valid(self):
+        for invalid in [-1, 2, True, '1']:
+            self.cfg['snapshotChecks'] = invalid
+            self.save_config()
+            self.assertNotEqual(self.cli('begin', '--scope', 'View.cs', ok=False).returncode, 0)
+
+    def test_completed_snapshot_cannot_rewrite_the_measured_screen(self):
+        (self.root / 'check.py').write_text(
+            "from pathlib import Path; p=Path('measurements/guard-after.json'); "
+            "p.write_text(p.read_text()+' ')")
+        self.begin()
+        self.cli('build')
+        self.assertIn('artifacts were changed', self.cli('after', ok=False).stderr)
+        self.assertNotEqual(self.cli('verify', ok=False).returncode, 0)
+
+    def test_dependency_resolution_keeps_extensionless_symlinks_and_rechecks_targets(self):
+        alias = self.root / 'checker'
+        alias.symlink_to('check.py')
+        self.cfg['checks'] = [[sys.executable, 'checker']]
+        self.save_config()
+        self.begin()
+        self.assertIn(str(self.root / 'check.py'), g.input_files(self.root, g.config(self.root)))
+        (self.root / 'other-check.py').write_text("print('different check')")
+        alias.unlink()
+        alias.symlink_to('other-check.py')
+        self.assertIn('validation code', self.cli('after', ok=False).stderr)
+        self.denied(self.hook('pre'))
+
+    def test_fresh_forces_snapshot_prefix_to_run_again(self):
+        self.setup_retry()
+        self.cli('after', '--fresh')
+        self.assertEqual((self.root / 'count').read_text(), '2')
+        self.cli('verify')
+
     def test_unified_config_preserves_version_and_after_verification(self):
         g.write(self.root / 'render-guard.json', {'gui': self.cfg})
         (self.root / 'gui-guard.json').unlink()
