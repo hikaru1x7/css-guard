@@ -24,7 +24,7 @@
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hikaru1x7/css-guard.git"
+    "url": "git+https://github.com/hikaru1x7/render-guard.git"
   },
   "keywords": [
     "css",

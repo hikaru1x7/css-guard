@@ -4,7 +4,7 @@
 
 A skill for AI coding agents editing CSS, native application GUIs and SVG code. One entry point and one hook integration, with mode-specific measurements and checks.
 
-RenderGuard continues the existing CSS Guard project. Its established CSS measurements, scope rules, screenshot comparisons and hook behavior remain in use. The GUI engine keeps runtime-version, DPI, comparison-control and evidence checks. SVG adds rendered shape, text, stroke and comparison-image checks. The repository URL remains unchanged so existing links keep working.
+RenderGuard continues the existing CSS Guard project. Its established CSS measurements, scope rules, screenshot comparisons and hook behavior remain in use. The GUI engine keeps runtime-version, DPI, comparison-control and evidence checks. SVG adds rendered shape, text, stroke and comparison-image checks. The public repository is named `render-guard`.
 
 | Mode | Measurement | Tool |
 |---|---|---|
@@ -19,8 +19,8 @@ Pillow, pixelmatch and pngjs compare images; they do not replace rendered contro
 Requires Git, Node.js 20.11+, Python 3.10+, npm, Bash, and an agent that can run local commands and inspect images. Windows control measurement requires Windows/WSL and a compatible adapter.
 
 ```bash
-git clone https://github.com/hikaru1x7/css-guard.git
-cd css-guard
+git clone https://github.com/hikaru1x7/render-guard.git
+cd render-guard
 ./install.sh
 ```
 
@@ -32,7 +32,7 @@ For other agents, install the CLI without changing Claude/Codex settings:
 
 ```bash
 ./install.sh --cli-only
-npx skills add hikaru1x7/css-guard --skill render-guard
+npx skills add hikaru1x7/render-guard --skill render-guard
 ```
 
 Or read [the skill](skills/render-guard/SKILL.md) from your checkout. Installing instructions alone does not install tools or hooks. Other agents must review scope and evidence directly; verify cannot prove unrecorded edits.
